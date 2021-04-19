@@ -1,4 +1,5 @@
 #include "parser.h"
+#include <cstdio>    // fopen, fclose, fread, fwrite, BUFSIZ
 
 using namespace nvinfer1;
 
@@ -155,14 +156,22 @@ void Parser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dims){
 }
 
 bool Parser::export_trt(){
-	cout << "When you convert to TensorRT, the onnx file will be deleted!(Make sure you coppied it), Press [y\\n] to continue or abort:";
-	char press;
-	cin >> press;
-	if (!(press == 'y' || press == 'Y')){
-		cout << "Aborted! \n";
-		return false;
-	}
-	std::ofstream engineFile(this->model_path, std::ios::binary);
+	size_t lastindex = this->model_path.find_last_of("."); 
+	string trt_filename = this->model_path.substr(0, lastindex) + ".trt"; 
+
+	char buf[BUFSIZ];
+    size_t size;
+    FILE* source = fopen(this->model_path.c_str(), "rb");
+    FILE* dest = fopen(trt_filename.c_str(), "wb");
+
+    while (size = fread(buf, 1, BUFSIZ, source)) {
+        fwrite(buf, 1, size, dest);
+    }
+
+    fclose(source);
+    fclose(dest);
+
+	std::ofstream engineFile(trt_filename, std::ios::binary);
     if (!engineFile)
     {
         cerr << "Cannot open engine file: " << this->model_path << std::endl;
@@ -176,10 +185,8 @@ bool Parser::export_trt(){
         return false;
     }
 
+    
     engineFile.write(static_cast<char*>(serializedEngine->data()), serializedEngine->size());
-    size_t lastindex = this->model_path.find_last_of("."); 
-	string trt_filename = this->model_path.substr(0, lastindex) + ".trt"; 
-    rename(this->model_path.c_str(), trt_filename.c_str());
     return !engineFile.fail();
 }
 
