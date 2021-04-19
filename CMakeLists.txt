@@ -24,7 +24,9 @@ link_libraries(stdc++fs)
 
 add_executable(main main.cpp
 			onnxparser.h
-			onnxparser.cpp)
+			onnxparser.cpp
+			trtparser.h
+			trtparser.cpp)
 
 
 target_link_libraries( main ${OpenCV_LIBS})

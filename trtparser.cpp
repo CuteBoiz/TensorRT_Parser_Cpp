@@ -1,11 +1,12 @@
-#include "onnxparser.h"
+#include "trtparser.h"
 
 using namespace nvinfer1;
+
 
 #ifndef LOGGER
 #define LOGGER
 
-class Logger : public nvinfer1::ILogger
+class Logger1 : public nvinfer1::ILogger
 {
 public:
     void log(Severity severity, const char* msg) override {
@@ -17,10 +18,10 @@ public:
     {
         return *this;
     }
-} gLogger;
-#endif
+} gLogger1;
+#endif 
 
-size_t OnnxParser::getSizeByDim(const nvinfer1::Dims& dims)
+size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 {
     size_t size = 1;
     for (size_t i = 0; i < dims.nbDims; ++i)
@@ -30,41 +31,37 @@ size_t OnnxParser::getSizeByDim(const nvinfer1::Dims& dims)
     return size;
 }
 
-OnnxParser::OnnxParser(string path, int batch_sz = 1){
+
+TRTParser::TRTParser(string path, int batch_sz = 1){
 	this->model_path = path;
 	this->batch_size = batch_sz;
-	if(this->model_path.substr(this->model_path.find_last_of(".") + 1) == "onnx"){
-		nvinfer1::IBuilder*builder{nvinfer1::createInferBuilder(gLogger)};
-	    const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-	    nvinfer1::INetworkDefinition* network{builder->createNetworkV2(explicitBatch)};
-	 
-	    TRTUniquePtr<nvonnxparser::IParser> parser{nvonnxparser::createParser(*network, gLogger)};
-	    TRTUniquePtr<nvinfer1::IBuilderConfig> config{builder->createBuilderConfig()};
-	    // parse ONNX
-	    if (!parser->parseFromFile(this->model_path.c_str(), static_cast< int >(nvinfer1::ILogger::Severity::kINFO)))
-	    {
-	        std::cerr << "ERROR: could not parse the model.\n";
-	        return;
-	    }
-		// allow TensorRT to use up to 1GB of GPU memory for tactic selection.
-		config->setMaxWorkspaceSize(1ULL << 30);
-		// use FP16 mode if possible
-		if (builder->platformHasFastFp16())
-		{
-		    config->setFlag(nvinfer1::BuilderFlag::kFP16);
-		}
-		// we have only one image in batch
-		builder->setMaxBatchSize(1);
-	    this->engine.reset(builder->buildEngineWithConfig(*network, *config));
-	    this->context.reset(this->engine->createExecutionContext());
+	if (this->model_path.substr(this->model_path.find_last_of(".") + 1) == "trt"){
+		std::stringstream gieModelStream; 
+		gieModelStream.seekg(0, gieModelStream.beg); 
+		std::ifstream cache(this->model_path); 
+		gieModelStream << cache.rdbuf();
+		cache.close(); 
+		IRuntime* runtime = createInferRuntime(gLogger1); 
+		assert(runtime != nullptr); 
+		gieModelStream.seekg(0, std::ios::end);
+		const int modelSize = gieModelStream.tellg(); 
+		gieModelStream.seekg(0, std::ios::beg);
+		void* modelMem = malloc(modelSize); 
+		gieModelStream.read((char*)modelMem, modelSize);
+		this->engine = runtime->deserializeCudaEngine(modelMem, modelSize, NULL); assert(engine != nullptr);
+		this->context = this->engine->createExecutionContext();
+		free(modelMem);
 	}
-	else
+	else{
 		cerr << "Cannot read " << this->model_path << endl;
-}
-OnnxParser::~OnnxParser(){
+		exit(0);
+	}
 
 }
-void OnnxParser::inference(cv::Mat image){
+
+TRTParser::~TRTParser(){}
+
+void TRTParser::inference(cv::Mat image){
 	//create buffer
 	std::vector< nvinfer1::Dims > input_dims; // we expect only one input
 	std::vector< nvinfer1::Dims > output_dims; // and one output
@@ -89,13 +86,15 @@ void OnnxParser::inference(cv::Mat image){
 	}
 	this->preprocessImage(image, (float*)buffers[0], input_dims[0]);
 	this->context->enqueue(batch_size, buffers.data(), 0, nullptr);
+	cout << "1 \n";
 	this->postprocessResults((float *) buffers[1], output_dims[0]);
+	cout << "1 \n";
 	for (void* buf : buffers)
     {
         cudaFree(buf);
     }
 }
-void OnnxParser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1::Dims& dims){
+void TRTParser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1::Dims& dims){
 	if (frame.empty()){
 		std::cerr << "Cannot load Input image!! \n";
         return;
@@ -124,7 +123,7 @@ void OnnxParser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1
     }
     cv::cuda::split(flt_image, chw);
 }
-void OnnxParser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dims){
+void TRTParser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dims){
 	// copy results from GPU to CPU
     std::vector< float > cpu_output(getSizeByDim(dims) * this->batch_size);
     cudaMemcpy(cpu_output.data(), gpu_output, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
@@ -132,33 +131,4 @@ void OnnxParser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dim
     for (int i = 0; i < cpu_output.size(); i ++)
     	cout << cpu_output.at(i) << ' ';
     cout << endl;
-}
-
-bool OnnxParser::export_trt(){
-	cout << "When you convert to TensorRT, the onnx file will be deleted!(Make sure you coppied it), Press [y\\n] to continue or abort:";
-	char press;
-	cin >> press;
-	if (!(press == 'y' || press == 'Y')){
-		cout << "Aborted! \n";
-		return false;
-	}
-	std::ofstream engineFile(this->model_path, std::ios::binary);
-    if (!engineFile)
-    {
-        cerr << "Cannot open engine file: " << this->model_path << std::endl;
-        return false;
-    }
-
-    TRTUniquePtr<nvinfer1::IHostMemory> serializedEngine{this->engine->serialize()};
-    if (serializedEngine == nullptr)
-    {
-        cerr << "Engine serialization failed" << std::endl;
-        return false;
-    }
-
-    engineFile.write(static_cast<char*>(serializedEngine->data()), serializedEngine->size());
-    size_t lastindex = this->model_path.find_last_of("."); 
-	string trt_filename = this->model_path.substr(0, lastindex) + ".trt"; 
-    rename(this->model_path.c_str(), trt_filename.c_str());
-    return !engineFile.fail();
 }
