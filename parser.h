@@ -23,6 +23,8 @@
 
 using namespace std;
 
+#define MAX_WORKSPACE (1 << 30)
+
 #ifndef TRTDEST
 #define TRTDEST
 struct TRTDestroy
@@ -36,19 +38,19 @@ struct TRTDestroy
         }
     }
 };
-#endif
 
 template< class T >
 using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
 
+#endif //TRTDEST
 
 class OnnxParser{
 
 private:
 	string model_path;
 	int batch_size;
-	TRTUniquePtr< nvinfer1::ICudaEngine> engine{nullptr};
-	TRTUniquePtr< nvinfer1::IExecutionContext > context{nullptr};
+	nvinfer1::ICudaEngine* engine;
+	nvinfer1::IExecutionContext* context;
 
 	size_t getSizeByDim(const nvinfer1::Dims& dims);
 	void preprocessImage(cv::Mat image, float* gpu_input, const nvinfer1::Dims& dims);

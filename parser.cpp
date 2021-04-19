@@ -1,4 +1,4 @@
-#include "onnxparser.h"
+#include "parser.h"
 
 using namespace nvinfer1;
 
@@ -33,7 +33,8 @@ size_t OnnxParser::getSizeByDim(const nvinfer1::Dims& dims)
 OnnxParser::OnnxParser(string path, int batch_sz = 1){
 	this->model_path = path;
 	this->batch_size = batch_sz;
-	if(this->model_path.substr(this->model_path.find_last_of(".") + 1) == "onnx"){
+	string file_extention = this->model_path.substr(this->model_path.find_last_of(".") + 1);
+	if(file_extention == "onnx"){
 		nvinfer1::IBuilder*builder{nvinfer1::createInferBuilder(gLogger)};
 	    const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
 	    nvinfer1::INetworkDefinition* network{builder->createNetworkV2(explicitBatch)};
@@ -47,7 +48,7 @@ OnnxParser::OnnxParser(string path, int batch_sz = 1){
 	        exit(0);
 	    }
 		// allow TensorRT to use up to 1GB of GPU memory for tactic selection.
-		config->setMaxWorkspaceSize(1ULL << 30);
+		config->setMaxWorkspaceSize(MAX_WORKSPACE);
 		// use FP16 mode if possible
 		if (builder->platformHasFastFp16())
 		{
@@ -55,8 +56,29 @@ OnnxParser::OnnxParser(string path, int batch_sz = 1){
 		}
 		// we have only one image in batch
 		builder->setMaxBatchSize(1);
-	    this->engine.reset(builder->buildEngineWithConfig(*network, *config));
-	    this->context.reset(this->engine->createExecutionContext());
+	    this->engine = builder->buildEngineWithConfig(*network, *config);
+	    this->context = this->engine->createExecutionContext();
+	}
+	else if(file_extention == "trt"){
+		std::vector<char> trtModelStream_;
+		size_t size{ 0 };
+
+		std::ifstream file(this->model_path, std::ios::binary);
+		if (file.good())
+		{
+			file.seekg(0, file.end);
+			size = file.tellg();
+			file.seekg(0, file.beg);
+			trtModelStream_.resize(size);
+			file.read(trtModelStream_.data(), size);
+			file.close();
+		}
+		std::cout << size <<endl;
+		IRuntime* runtime = createInferRuntime(gLogger);
+		assert(runtime != nullptr);
+		this->engine = runtime->deserializeCudaEngine(trtModelStream_.data(), size, nullptr);
+		assert(this->engine != nullptr);
+		this->context = this->engine->createExecutionContext();
 	}
 	else
 		cerr << "Cannot read " << this->model_path << endl;
@@ -68,18 +90,18 @@ void OnnxParser::inference(cv::Mat image){
 	//create buffer
 	std::vector< nvinfer1::Dims > input_dims; // we expect only one input
 	std::vector< nvinfer1::Dims > output_dims; // and one output
-	std::vector< void* > buffers(engine->getNbBindings()); // buffers for input and output data
-	for (size_t i = 0; i < engine->getNbBindings(); ++i)
+	std::vector< void* > buffers(this->engine->getNbBindings()); // buffers for input and output data
+	for (size_t i = 0; i < this->engine->getNbBindings(); ++i)
 	{
-	    auto binding_size = getSizeByDim(engine->getBindingDimensions(i)) * batch_size * sizeof(float);
+	    auto binding_size = getSizeByDim(this->engine->getBindingDimensions(i)) * batch_size * sizeof(float);
 	    cudaMalloc(&buffers[i], binding_size);
-	    if (engine->bindingIsInput(i))
+	    if (this->engine->bindingIsInput(i))
 	    {
-	        input_dims.emplace_back(engine->getBindingDimensions(i));
+	        input_dims.emplace_back(this->engine->getBindingDimensions(i));
 	    }
 	    else
 	    {
-	        output_dims.emplace_back(engine->getBindingDimensions(i));
+	        output_dims.emplace_back(this->engine->getBindingDimensions(i));
 	    }
 	}
 	if (input_dims.empty() || output_dims.empty())
