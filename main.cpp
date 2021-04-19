@@ -35,7 +35,7 @@ int main(int argc,char** argv){
 	[images folder path]
 	*/
 	string model_path;
-	const char* folder_path;
+	string folder_path;
 
 	if (argc == 3 && std::string(argv[1]) == "-e"){
 		model_path = argv[2];
@@ -77,7 +77,7 @@ int main(int argc,char** argv){
 			cout << model_path << " Found!, Parsing Model ... \n";
 		}
 		std::vector<std::string> file_names;
-		if (read_files_in_dir(folder_path, file_names) < 0) {
+		if (read_files_in_dir(folder_path.c_str(), file_names) < 0) {
 	        std::cout << "read_files_in_dir failed." << std::endl;
 	        return -1;
 	    }
