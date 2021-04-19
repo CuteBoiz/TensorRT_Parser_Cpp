@@ -1,6 +1,5 @@
 #include <iostream>
-#include <onnxparser.h>
-#include <trtparser.h>
+#include "parser.h"
 #include <chrono>
 #include <dirent.h>
 
@@ -14,9 +13,6 @@ static inline int read_files_in_dir(const char *p_dir_name, std::vector<std::str
     while ((p_file = readdir(p_dir)) != nullptr) {
         if (strcmp(p_file->d_name, ".") != 0 &&
             strcmp(p_file->d_name, "..") != 0) {
-            //std::string cur_file_name(p_dir_name);
-            //cur_file_name += "/";
-            //cur_file_name += p_file->d_name;
             std::string cur_file_name(p_file->d_name);
             file_names.push_back(cur_file_name);
         }
@@ -81,22 +77,9 @@ int main(int argc,char** argv){
 	        std::cout << "read_files_in_dir failed." << std::endl;
 	        return -1;
 	    }
-		if (model_path.substr(model_path.find_last_of(".") + 1) == "onnx"){
+	    string model_extention = model_path.substr(model_path.find_last_of(".") + 1);
+		if (model_extention == "onnx" || model_extention == "trt"){
 			OnnxParser model(model_path, 1);
-			for (int f = 0; f < (int)file_names.size(); f++){
-				string file_extension = file_names[f].substr(file_names[f].find_last_of(".") + 1);
-				if (file_extension == "bmp" || file_extension == "png" || file_extension == "jpeg"){
-					auto start = std::chrono::system_clock::now();
-					cout << file_names[f] << endl;
-					image = cv::imread(folder_path + file_names[f]);
-					model.inference(image);
-					auto end = std::chrono::system_clock::now();
-	        		std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
-				}
-			}
-		}
-		else if (model_path.substr(model_path.find_last_of(".") + 1) == "trt"){
-			TRTParser model(model_path, 1);
 			for (int f = 0; f < (int)file_names.size(); f++){
 				string file_extension = file_names[f].substr(file_names[f].find_last_of(".") + 1);
 				if (file_extension == "bmp" || file_extension == "png" || file_extension == "jpeg"){
