@@ -35,28 +35,26 @@ size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 TRTParser::TRTParser(string path, int batch_sz = 1){
 	this->model_path = path;
 	this->batch_size = batch_sz;
-	if (this->model_path.substr(this->model_path.find_last_of(".") + 1) == "trt"){
-		std::stringstream gieModelStream; 
-		gieModelStream.seekg(0, gieModelStream.beg); 
-		std::ifstream cache(this->model_path); 
-		gieModelStream << cache.rdbuf();
-		cache.close(); 
-		IRuntime* runtime = createInferRuntime(gLogger1); 
-		assert(runtime != nullptr); 
-		gieModelStream.seekg(0, std::ios::end);
-		const int modelSize = gieModelStream.tellg(); 
-		gieModelStream.seekg(0, std::ios::beg);
-		void* modelMem = malloc(modelSize); 
-		gieModelStream.read((char*)modelMem, modelSize);
-		this->engine = runtime->deserializeCudaEngine(modelMem, modelSize, NULL); assert(engine != nullptr);
-		this->context = this->engine->createExecutionContext();
-		free(modelMem);
-	}
-	else{
-		cerr << "Cannot read " << this->model_path << endl;
-		exit(0);
-	}
 
+	std::vector<char> trtModelStream_;
+	size_t size{ 0 };
+
+	std::ifstream file(this->model_path, std::ios::binary);
+	if (file.good())
+	{
+		file.seekg(0, file.end);
+		size = file.tellg();
+		file.seekg(0, file.beg);
+		trtModelStream_.resize(size);
+		file.read(trtModelStream_.data(), size);
+		file.close();
+	}
+	std::cout << size <<endl;
+	IRuntime* runtime = createInferRuntime(gLogger1);
+	assert(runtime != nullptr);
+	this->engine = runtime->deserializeCudaEngine(trtModelStream_.data(), size, nullptr);
+	assert(this->engine != nullptr);
+	this->context = this->engine->createExecutionContext();
 }
 
 TRTParser::~TRTParser(){}

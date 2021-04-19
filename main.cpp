@@ -64,6 +64,9 @@ int main(int argc,char** argv){
 	else if (argc == 4 && std::string(argv[1]) == "-i"){
 		model_path = argv[2];
 		folder_path = argv[3];
+		if (folder_path[folder_path.length() - 1] != '/' && folder_path[folder_path.length() -1] != '\\') {
+			folder_path = folder_path + '/';
+		}
 		cv::Mat image;
 		std::ifstream f(model_path);
 		if (!f.good()){
