@@ -86,9 +86,7 @@ void TRTParser::inference(cv::Mat image){
 	}
 	this->preprocessImage(image, (float*)buffers[0], input_dims[0]);
 	this->context->enqueue(batch_size, buffers.data(), 0, nullptr);
-	cout << "1 \n";
 	this->postprocessResults((float *) buffers[1], output_dims[0]);
-	cout << "1 \n";
 	for (void* buf : buffers)
     {
         cudaFree(buf);
