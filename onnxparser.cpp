@@ -44,7 +44,7 @@ OnnxParser::OnnxParser(string path, int batch_sz = 1){
 	    if (!parser->parseFromFile(this->model_path.c_str(), static_cast< int >(nvinfer1::ILogger::Severity::kINFO)))
 	    {
 	        std::cerr << "ERROR: could not parse the model.\n";
-	        return;
+	        exit(0);
 	    }
 		// allow TensorRT to use up to 1GB of GPU memory for tactic selection.
 		config->setMaxWorkspaceSize(1ULL << 30);
@@ -98,7 +98,7 @@ void OnnxParser::inference(cv::Mat image){
 void OnnxParser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1::Dims& dims){
 	if (frame.empty()){
 		std::cerr << "Cannot load Input image!! \n";
-        return;
+        exit(0);
 	}
 	cv::cuda::GpuMat gpu_frame;
 	gpu_frame.upload(frame);

@@ -85,7 +85,7 @@ int main(int argc,char** argv){
 			OnnxParser model(model_path, 1);
 			for (int f = 0; f < (int)file_names.size(); f++){
 				string file_extension = file_names[f].substr(file_names[f].find_last_of(".") + 1);
-				if (file_extension == "bmp" || file_extension == "png" or file_extension == "jpeg"){
+				if (file_extension == "bmp" || file_extension == "png" || file_extension == "jpeg"){
 					auto start = std::chrono::system_clock::now();
 					cout << file_names[f] << endl;
 					image = cv::imread(folder_path + file_names[f]);
@@ -99,7 +99,7 @@ int main(int argc,char** argv){
 			TRTParser model(model_path, 1);
 			for (int f = 0; f < (int)file_names.size(); f++){
 				string file_extension = file_names[f].substr(file_names[f].find_last_of(".") + 1);
-				if (file_extension == "bmp" || file_extension == "png" or file_extension == "jpeg"){
+				if (file_extension == "bmp" || file_extension == "png" || file_extension == "jpeg"){
 					auto start = std::chrono::system_clock::now();
 					cout << file_names[f] << endl;
 					image = cv::imread(folder_path + file_names[f]);

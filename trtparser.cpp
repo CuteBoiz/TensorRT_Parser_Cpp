@@ -80,7 +80,7 @@ void TRTParser::inference(cv::Mat image){
 	if (input_dims.empty() || output_dims.empty())
 	{
 	    std::cerr << "Expect at least one input and one output for network \n";
-	    return;
+	    exit(0);
 	}
 	this->preprocessImage(image, (float*)buffers[0], input_dims[0]);
 	this->context->enqueue(batch_size, buffers.data(), 0, nullptr);
