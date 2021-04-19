@@ -20,7 +20,7 @@ public:
 } gLogger;
 #endif
 
-size_t OnnxParser::getSizeByDim(const nvinfer1::Dims& dims)
+size_t Parser::getSizeByDim(const nvinfer1::Dims& dims)
 {
     size_t size = 1;
     for (size_t i = 0; i < dims.nbDims; ++i)
@@ -30,7 +30,7 @@ size_t OnnxParser::getSizeByDim(const nvinfer1::Dims& dims)
     return size;
 }
 
-OnnxParser::OnnxParser(string path, int batch_sz = 1){
+Parser::Parser(string path, int batch_sz = 1){
 	this->model_path = path;
 	this->batch_size = batch_sz;
 	string file_extention = this->model_path.substr(this->model_path.find_last_of(".") + 1);
@@ -83,10 +83,8 @@ OnnxParser::OnnxParser(string path, int batch_sz = 1){
 	else
 		cerr << "Cannot read " << this->model_path << endl;
 }
-OnnxParser::~OnnxParser(){
 
-}
-void OnnxParser::inference(cv::Mat image){
+void Parser::inference(cv::Mat image){
 	//create buffer
 	std::vector< nvinfer1::Dims > input_dims; // we expect only one input
 	std::vector< nvinfer1::Dims > output_dims; // and one output
@@ -117,7 +115,7 @@ void OnnxParser::inference(cv::Mat image){
         cudaFree(buf);
     }
 }
-void OnnxParser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1::Dims& dims){
+void Parser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1::Dims& dims){
 	if (frame.empty()){
 		std::cerr << "Cannot load Input image!! \n";
         exit(0);
@@ -146,7 +144,7 @@ void OnnxParser::preprocessImage(cv::Mat frame, float* gpu_input, const nvinfer1
     }
     cv::cuda::split(flt_image, chw);
 }
-void OnnxParser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dims){
+void Parser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dims){
 	// copy results from GPU to CPU
     std::vector< float > cpu_output(getSizeByDim(dims) * this->batch_size);
     cudaMemcpy(cpu_output.data(), gpu_output, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
@@ -156,7 +154,7 @@ void OnnxParser::postprocessResults(float *gpu_output, const nvinfer1::Dims &dim
     cout << endl;
 }
 
-bool OnnxParser::export_trt(){
+bool Parser::export_trt(){
 	cout << "When you convert to TensorRT, the onnx file will be deleted!(Make sure you coppied it), Press [y\\n] to continue or abort:";
 	char press;
 	cin >> press;
@@ -184,3 +182,5 @@ bool OnnxParser::export_trt(){
     rename(this->model_path.c_str(), trt_filename.c_str());
     return !engineFile.fail();
 }
+
+Parser::~Parser(){}

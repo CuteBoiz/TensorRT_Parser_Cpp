@@ -3,6 +3,8 @@
 #include <chrono>
 #include <dirent.h>
 
+#define MAX_BATCHSIZE 1
+
 static inline int read_files_in_dir(const char *p_dir_name, std::vector<std::string> &file_names) {
     DIR *p_dir = opendir(p_dir_name);
     if (p_dir == nullptr) {
@@ -25,10 +27,11 @@ static inline int read_files_in_dir(const char *p_dir_name, std::vector<std::str
 int main(int argc,char** argv){
 	/*
 	arguments:
-	[mode] 	-i :infer
-			-e : export onnx to trt
-	[model path]
-	[images folder path]
+	[mode] 	-e : export onnx to trt
+				[model path]
+			-i : infer onnx or trt model.
+				[model path]
+				[images folder path]
 	*/
 	string model_path;
 	string folder_path;
@@ -43,7 +46,7 @@ int main(int argc,char** argv){
 		else {
 			cout << model_path << " Found!, Try To Exporting Model ... \n";
 		}
-		OnnxParser model(model_path, 1);
+		Parser model(model_path, MAX_BATCHSIZE);
 		if (model_path.substr(model_path.find_last_of(".") + 1) == "onnx"){
 			if (model.export_trt()){
 				cout << "Export to TensorRT Success! \n"; return 0;
@@ -79,7 +82,7 @@ int main(int argc,char** argv){
 	    }
 	    string model_extention = model_path.substr(model_path.find_last_of(".") + 1);
 		if (model_extention == "onnx" || model_extention == "trt"){
-			OnnxParser model(model_path, 1);
+			Parser model(model_path, MAX_BATCHSIZE);
 			for (int f = 0; f < (int)file_names.size(); f++){
 				string file_extension = file_names[f].substr(file_names[f].find_last_of(".") + 1);
 				if (file_extension == "bmp" || file_extension == "png" || file_extension == "jpeg"){
@@ -98,7 +101,7 @@ int main(int argc,char** argv){
 		}
 	}
 	else{
-		cerr << "Undefined arguments. [-e] [model_path] or [-i] [model_path] [images_path]. \n";
+		cerr << "Undefined arguments. \n [-e] [model_path] to export trt model \n [-i] [model_path] [images_path]. to infer trt model \n";
 		return -1;
 	}
 	

@@ -44,7 +44,7 @@ using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
 
 #endif //TRTDEST
 
-class OnnxParser{
+class Parser{
 
 private:
 	string model_path;
@@ -56,8 +56,8 @@ private:
 	void preprocessImage(cv::Mat image, float* gpu_input, const nvinfer1::Dims& dims);
 	void postprocessResults(float *gpu_output, const nvinfer1::Dims &dims);
 public:
-	OnnxParser(string model_path, int batch_sz);
-	~OnnxParser();
+	Parser(string model_path, int batch_sz);
+	~Parser();
 	
 	void inference(cv::Mat image);
 	bool export_trt();
