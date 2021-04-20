@@ -49,4 +49,5 @@ This repo include both .trt and .onnx infer
 Example:
 ```sh
 ./main -i ../2020_0421_0925.trt ../Dataset/Test/
+./main -i ../2020_0421_0925.onnx ../Dataset/Test/
 ```
