@@ -1,11 +1,11 @@
 # TensorRT_Parser_Cpp
 
-Onnx (.onnx) and TensorRT(.trt) inference in C++
+Onnx and TensorRT model inference in C++
 
 ## I. Prerequiste:
 
-- [CUDA/CUDNN/TensorRT]()
-- [OpenCV]()
+- [CUDA/CUDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)
+- [OpenCV](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)
 
 ## II. How To Use:
 
@@ -46,7 +46,7 @@ This repo include both .trt and .onnx infer
 ./main -i "model_path" "images_folder_path"
 ```
 
-Expample:
+Example:
 ```sh
 ./main -i ../2020_0421_0925.trt ../Dataset/Test/
 ```
