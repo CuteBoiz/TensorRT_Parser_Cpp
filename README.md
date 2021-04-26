@@ -20,7 +20,14 @@ cd TensorRT_Parser_Cpp
 gedit CMakeList #Then change my TensorRT path to your TensorRT path(include and lib)
 ```
 
-### 2. Build.
+### 2. Add dirent.h to C++ library
+
+#### Windows - Visual Studio
+ move dirent.h file in Additional files to `Visual-Studio-Installed-Path\2017\Community\VC\Tools\MSVC\14.16.27023\include`
+ 
+#### Ubuntu
+
+### 3. Build.
 
 ```sh
 mkdir build && build
@@ -28,7 +35,7 @@ cmake ..
 make
 ```
 
-### 3. Export Onnx model (.onnx) to TensorRT model (.trt).
+### 4. Export Onnx model (.onnx) to TensorRT model (.trt).
 
 ```sh
 ./main -e "model_path"
@@ -38,7 +45,7 @@ Example:
 ./main -e ../2020_0421_0925.onnx
 ```
 
-### 4. Inference:
+### 5. Inference:
 
 This repo include both .trt and .onnx infer
 
