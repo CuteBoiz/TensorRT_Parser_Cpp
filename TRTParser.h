@@ -1,5 +1,6 @@
-#ifndef ONNX_PARSER_H
-#define ONNX_PARSER_H
+#pragma once
+#ifndef TRT_PARSER_H
+#define TRT_PARSER_H
 
 #include <iostream>
 #include <string.h>
@@ -24,44 +25,46 @@
 using namespace std;
 
 #define MAX_WORKSPACE (1 << 30)
+#define MAX_BATCHSIZE 10
 
-#ifndef TRTDEST
-#define TRTDEST
+
 struct TRTDestroy
 {
-    template< class T >
-    void operator()(T* obj) const
-    {
-        if (obj)
-        {
-            obj->destroy();
-        }
-    }
+	template< class T >
+	void operator()(T* obj) const
+	{
+		if (obj)
+		{
+			obj->destroy();
+		}
+	}
 };
 
 template< class T >
 using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
 
-#endif //TRTDEST
 
-class Parser{
 
+class TRTParser {
 private:
-	string model_path;
-	int batch_size;
+	string enginePath;
+	int batchSize;
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
 
+	nvinfer1::ICudaEngine* getTRTEngine();
 	size_t getSizeByDim(const nvinfer1::Dims& dims);
-	void preprocessImage(cv::Mat image, float* gpu_input, const nvinfer1::Dims& dims);
-	void postprocessResults(float *gpu_output, const nvinfer1::Dims &dims);
+	void preprocessImage(vector<cv::Mat> image, float* gpu_input, const nvinfer1::Dims& dims);
+	void postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims);
 public:
-	Parser(string model_path, int batch_sz);
-	~Parser();
-	
-	void inference(cv::Mat image);
-	bool export_trt();
-	
+	TRTParser();
+	bool init(string enginePath, int batch_sz);
+	~TRTParser();
+
+	void inference(vector<cv::Mat> image);
 };
 
-#endif
+nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath);
+bool saveTRTEngine(string onnxEnginePath);
+
+#endif //TRT_PARSER_H
