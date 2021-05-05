@@ -16,17 +16,13 @@ public:
 
 TRTParser::TRTParser() {
 	enginePath = " ";
-	batchSize = 0;
 	engine = nullptr;
 	context = nullptr;
 }
 
-bool TRTParser::init(string path, int batch_sz) {
+bool TRTParser::init(string path) {
 	this->enginePath = path;
-	this->batchSize = batch_sz;
-	if (this->batchSize > MAX_BATCHSIZE) {
-		return false;
-	}
+
 	this->engine = this->getTRTEngine();
 	this->context = this->engine->createExecutionContext();
 	if (this->engine == nullptr || this->context == nullptr) {

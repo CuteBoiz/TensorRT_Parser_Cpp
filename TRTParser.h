@@ -48,7 +48,6 @@ using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
 class TRTParser {
 private:
 	string enginePath;
-	int batchSize;
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
 
