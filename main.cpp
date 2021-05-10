@@ -2,8 +2,6 @@
 #include <dirent.h>
 #include "TRTParser.h"
 
-#define BATCH_SIZE 1
-
 static inline int read_files_in_dir(const char *p_dir_name, std::vector<std::string> &file_names) {
     DIR *p_dir = opendir(p_dir_name);
     if (p_dir == nullptr) {
@@ -30,15 +28,20 @@ int main(int argc,char** argv){
 			-i : infer onnx or trt model.
 				[model path]
 				[images folder path]
+				[model image size]
+				[batch size]
 	*/
-	string enginePath;
-	string folderPath;
+	static string enginePath;
+	static string folderPath;
+	static int modelImageSize = 0;
+	static int batchSize = 0;
+
 
 	if (argc == 3 && std::string(argv[1]) == "-e"){
 		enginePath = argv[2];
 		std::ifstream f(enginePath);
 		if (!f.good()){
-			cerr << enginePath << " not found! \n";
+			cerr <<"ERROR: "<< enginePath << " not found! \n";
 			return -1;
 		}
 		else {
@@ -46,23 +49,35 @@ int main(int argc,char** argv){
 		}
 		if (enginePath.substr(enginePath.find_last_of(".") + 1) == "onnx"){
 			if (saveTRTEngine(enginePath)){
-				cout << "Export to TensorRT Success! \n"; return 0;
+				cout << "Export to TensorRT Success! \n"; 
+				return 0;
 			}
 			else{
-				cout << "Export Failed! \n"; return -1;
+				cerr << "ERROR: Export Failed! \n"; 
+				return -1;
 			}
 		}
 	} 
-	else if (argc == 4 && std::string(argv[1]) == "-i"){
+	else if (argc == 5 && std::string(argv[1]) == "-i"){
 		enginePath = argv[2];
 		folderPath = argv[3];
+		modelImageSize = argv[4];
+		batchSize = argv[5];
+		if (modelImageSize <= 0) {
+			cerr << "ERROR: model image size must larger than 0 \n";
+			return -1;
+		}
+		if (batchSize <= 0){
+			cerr << "ERROR: batch size must larger than 0 \n";
+			return -1;
+		}
 		if (folderPath[folderPath.length() - 1] != '/' && folderPath[folderPath.length() -1] != '\\') {
 			folderPath = folderPath + '/';
 		}
 		cv::Mat image;
 		std::ifstream f(enginePath);
 		if (!f.good()){
-			cerr << enginePath << " not found! \n";
+			cerr <<"ERROR: " <<enginePath << " not found! \n";
 			return -1;
 		}
 		else {
@@ -77,7 +92,30 @@ int main(int argc,char** argv){
 	    string model_extention = enginePath.substr(enginePath.find_last_of(".") + 1);
 		if (model_extention == "trt"){
 			TRTParser model.init(enginePath, BATCH_SIZE);
-			
+			int i = 0;
+			std::vector<cv::Mat> images;
+			for (int f = 0; f < (int)fileNames.size(); f += i) {
+				uint32_t index = 0;
+				for (i = 0; index < batchSize && (f + i) < (int)fileNames.size(); i++) {
+					std::string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
+					if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
+						cv::Mat image = cv::imread(SFolderPath + fileNames[f + i], imageSize_);
+						cv::Size dim = cv::Size(modelImageSize, modelImageSize);
+						cv::resize(image, image, dim, cv::INTER_AREA);
+						images.emplace_back(image);
+						index++;
+					}
+				}
+				if (images.size() == 0) {
+					continue;
+				}
+				auto start = chrono::system_clock::now();
+				model.inference(images);
+				auto end = chrono::system_clock::now();
+				cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
+
+				images.clear();
+			}
 		}
 		else{
 			cerr << "Undefined extension of " << enginePath <<". Model path must be .trt! \n";
@@ -85,7 +123,7 @@ int main(int argc,char** argv){
 		}
 	}
 	else{
-		cerr << "Undefined arguments. \n [-e] [enginePath] to export trt model \n [-i] [enginePath] [imagesFolderPath]. to infer trt model \n";
+		cerr << "Undefined arguments. \n [-e] [enginePath] to export trt model \n [-i] [enginePath] [imagesFolderPath] [modelImageSize] [batchSize]. to infer trt model \n";
 		return -1;
 	}
 	
