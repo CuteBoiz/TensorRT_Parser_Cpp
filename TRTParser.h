@@ -57,7 +57,7 @@ private:
 	void postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims);
 public:
 	TRTParser();
-	bool init(string enginePath, int batch_sz);
+	bool init(string enginePath);
 	~TRTParser();
 
 	void inference(vector<cv::Mat> image);

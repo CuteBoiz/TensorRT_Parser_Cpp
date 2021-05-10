@@ -1,5 +1,6 @@
 #include <iostream>
 #include <dirent.h>
+#include <chrono>
 #include "TRTParser.h"
 
 static inline int read_files_in_dir(const char *p_dir_name, std::vector<std::string> &file_names) {
@@ -58,11 +59,11 @@ int main(int argc,char** argv){
 			}
 		}
 	} 
-	else if (argc == 5 && std::string(argv[1]) == "-i"){
+	else if (argc == 6 && std::string(argv[1]) == "-i"){
 		enginePath = argv[2];
 		folderPath = argv[3];
-		modelImageSize = argv[4];
-		batchSize = argv[5];
+		modelImageSize = atoi(argv[4]);
+		batchSize = atoi(argv[5]);
 		if (modelImageSize <= 0) {
 			cerr << "ERROR: model image size must larger than 0 \n";
 			return -1;
@@ -83,15 +84,16 @@ int main(int argc,char** argv){
 		else {
 			cout << enginePath << " Found!, Parsing Model ... \n";
 		}
-		std::vector<std::string> file_names;
-		if (read_files_in_dir(folderPath.c_str(), file_names) < 0) {
+		std::vector<std::string> fileNames;
+		if (read_files_in_dir(folderPath.c_str(), fileNames) < 0) {
 	        std::cout << "read_files_in_dir failed." << std::endl;
 	        return -1;
 	    }
 
 	    string model_extention = enginePath.substr(enginePath.find_last_of(".") + 1);
 		if (model_extention == "trt"){
-			TRTParser model.init(enginePath, BATCH_SIZE);
+			TRTParser engine;
+			engine.init(enginePath);
 			int i = 0;
 			std::vector<cv::Mat> images;
 			for (int f = 0; f < (int)fileNames.size(); f += i) {
@@ -99,7 +101,8 @@ int main(int argc,char** argv){
 				for (i = 0; index < batchSize && (f + i) < (int)fileNames.size(); i++) {
 					std::string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
 					if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
-						cv::Mat image = cv::imread(SFolderPath + fileNames[f + i], imageSize_);
+						cout << fileNames[f + i] << endl;
+						cv::Mat image = cv::imread(folderPath + fileNames[f + i]);
 						cv::Size dim = cv::Size(modelImageSize, modelImageSize);
 						cv::resize(image, image, dim, cv::INTER_AREA);
 						images.emplace_back(image);
@@ -110,7 +113,7 @@ int main(int argc,char** argv){
 					continue;
 				}
 				auto start = chrono::system_clock::now();
-				model.inference(images);
+				engine.inference(images);
 				auto end = chrono::system_clock::now();
 				cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
 

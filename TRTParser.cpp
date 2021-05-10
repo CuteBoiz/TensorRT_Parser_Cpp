@@ -161,7 +161,7 @@ void TRTParser::inference(vector<cv::Mat> images) {
 	if (input_dims.empty() || output_dims.empty())
 	{
 		cerr << "ERROR: Expect at least one input and one output for network \n";
-		return {};
+		exit(-1);
 	}
 
 	this->preprocessImage(images, (float*)buffers[0], input_dims[0]);

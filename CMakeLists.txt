@@ -23,8 +23,8 @@ find_package(OpenCV REQUIRED)
 link_libraries(stdc++fs)
 
 add_executable(main main.cpp
-			parser.h
-			parser.cpp)
+			TRTParser.h
+			TRTParser.cpp)
 
 
 target_link_libraries( main ${OpenCV_LIBS})
