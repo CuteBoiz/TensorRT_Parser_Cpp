@@ -133,17 +133,32 @@ void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const n
 		cv::cuda::split(flt_image, chw);
 	}
 }
-void TRTParser::postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims) {
+void TRTParser::postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims, bool softMax) {
 	vector< float > cpu_output(dims.d[1] * size);
 
 	cudaMemcpy(cpu_output.data(), gpu_output, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
-
-	for (unsigned i = 0; i < cpu_output.size(); i++)
-		cout << cpu_output.at(i) << ' ';
-	cout << endl;
+	if (softMax){
+		std::transform(cpu_output.begin(), cpu_output.end(), cpu_output.begin(), [](float val) {return std::exp(val);});
+    	for (unsigned i = 0; i < size; i++){
+			float sum = 0;
+			for (int j = 0; j < dims.d[1]; j++){
+				sum += cpu_output.at(i*dims.d[1] + j);
+			}
+			for (int k = 0; k < dims.d[1]; k++){
+				cpu_output.at(i*dims.d[1] + k) /=  sum;
+			}
+		}
+	}
+	cout << "Result: \n";
+	for (unsigned i = 0; i < size; i++){
+		for (unsigned j = 0; j < dims.d[1]; j++){
+			cout << cpu_output.at(i*dims.d[1] + j) << ' ';
+		}
+		cout << endl;
+	}
 }
 
-void TRTParser::inference(vector<cv::Mat> images) {
+void TRTParser::inference(vector<cv::Mat> images, bool softMax) {
 
 	vector< nvinfer1::Dims > input_dims;
 	vector< nvinfer1::Dims > output_dims;
@@ -167,7 +182,7 @@ void TRTParser::inference(vector<cv::Mat> images) {
 	this->preprocessImage(images, (float*)buffers[0], input_dims[0]);
 	this->context->enqueue(images.size(), buffers.data(), 0, nullptr);
 
-	this->postprocessResult((float *)buffers[1], images.size(), output_dims[0]);
+	this->postprocessResult((float *)buffers[1], images.size(), output_dims[0], softMax);
 
 	input_dims.clear();
 	output_dims.clear();

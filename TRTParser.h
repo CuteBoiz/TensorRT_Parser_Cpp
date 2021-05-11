@@ -54,13 +54,13 @@ private:
 	nvinfer1::ICudaEngine* getTRTEngine();
 	size_t getSizeByDim(const nvinfer1::Dims& dims);
 	void preprocessImage(vector<cv::Mat> image, float* gpu_input, const nvinfer1::Dims& dims);
-	void postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims);
+	void postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims, bool softMax);
 public:
 	TRTParser();
 	bool init(string enginePath);
 	~TRTParser();
 
-	void inference(vector<cv::Mat> image);
+	void inference(vector<cv::Mat> image, bool softMax=false);
 };
 
 nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath);

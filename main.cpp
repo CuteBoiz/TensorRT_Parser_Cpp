@@ -113,7 +113,7 @@ int main(int argc,char** argv){
 					continue;
 				}
 				auto start = chrono::system_clock::now();
-				engine.inference(images);
+				engine.inference(images, false);
 				auto end = chrono::system_clock::now();
 				cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
 
