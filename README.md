@@ -51,7 +51,7 @@ Example:
 This repo include both .trt and .onnx infer
 
 ```sh
-./main -i "model_path" "images_folder_path"
+./main -i "model_path" "images_folder_path" "model_image_size" "batch_size"
 ```
 
 Example:
