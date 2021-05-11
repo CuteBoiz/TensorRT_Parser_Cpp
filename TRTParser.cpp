@@ -128,7 +128,7 @@ void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const n
 		vector< cv::cuda::GpuMat > chw;
 		for (size_t j = 0; j < channels; ++j)
 		{
-			chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i * 3 + j) * input_width * input_height));
+			chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i * channels + j) * input_width * input_height));
 		}
 		cv::cuda::split(flt_image, chw);
 	}
