@@ -7,12 +7,11 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-
-#cuda
+#Cuda
 include_directories(/usr/local/cuda/include)
 link_directories(/usr/local/cuda/lib64)
 
-#tensorrt
+#TensorRT
 include_directories(/home/tanphatnguyen/TensorRT-7.2.3.4/include)
 link_directories(/home/tanphatnguyen/TensorRT-7.2.3.4/lib)
 
@@ -26,10 +25,10 @@ add_executable(main main.cpp
 			TRTParser.h
 			TRTParser.cpp)
 
-
 target_link_libraries( main ${OpenCV_LIBS})
 target_link_libraries( main cudart)
 target_link_libraries( main nvinfer)
 target_link_libraries( main nvparsers)
 target_link_libraries( main stdc++fs)
 target_link_libraries( main nvonnxparser.so)
+
