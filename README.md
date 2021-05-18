@@ -1,9 +1,9 @@
 # TensorRT_Parser_Cpp
 
-Onnx and TensorRT model inference in C++
+ TensorRT model convert (from .onnx engine) and inference in C++.
 
-The Onnx model can be run on any system with diffenrece platform (Operating system/ CUDA / CuDNN / TensorRT) but take a lot of time to parse.
-Convert to TensorRT model (.trt) help you save a lot of parsing time ( 4-10 min) but can only run on fixed system you've built.
+The Onnx model can be run on any system with difference platform (Operating system/ CUDA / CuDNN / TensorRT) but take a lot of time to parse.
+Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing time (4-10 min) but can only run on fixed system you've built.
 
 ## I. Prerequiste.
 
