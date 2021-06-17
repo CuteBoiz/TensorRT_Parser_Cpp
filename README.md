@@ -22,7 +22,7 @@ gedit CMakeList #Then change my TensorRT path to your TensorRT path(include and 
 
 ### 2. Add dirent.h to C++ library (Windows Only)
 
- move dirent.h file from Additional files to `Visual-Studio-Installed-Path\2017\Community\VC\Tools\MSVC\14.16.27023\include`
+ move dirent.h file from [Additional files](https://github.com/CuteBoiz/TensorRT_Parser_Cpp/tree/main/Addition%20files) to `Visual-Studio-Installed-Path\2017\Community\VC\Tools\MSVC\14.16.27023\include`
 
 ### 3. Build.
 
