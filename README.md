@@ -35,16 +35,14 @@ make
 ### 4. Export Onnx model (.onnx) to TensorRT model (.trt).
 
 ```sh
-./main -e "model_path"
+./main -e "model_path" "max_batch_size"
 ```
 Example:
 ```sh
-./main -e ../2020_0421_0925.onnx
+./main -e ../2020_0421_0925.onnx 10
 ```
 
 ### 5. Inference:
-
-This repo include both .trt and .onnx infer
 
 ```sh
 ./main -i "model_path" "images_folder_path" "model_image_size" "batch_size"
