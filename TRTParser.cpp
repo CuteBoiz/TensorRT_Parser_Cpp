@@ -47,7 +47,7 @@ size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 	return size;
 }
 
-nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath) {
+nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize) {
 	nvinfer1::IBuilder*builder{ nvinfer1::createInferBuilder(gLogger) };
 	const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
 	nvinfer1::INetworkDefinition* network{ builder->createNetworkV2(explicitBatch) };
@@ -64,7 +64,7 @@ nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath) {
 	{
 		config->setFlag(nvinfer1::BuilderFlag::kFP16);
 	}
-	builder->setMaxBatchSize(MAX_BATCHSIZE);
+	builder->setMaxBatchSize(max_batchsize);
 	return builder->buildEngineWithConfig(*network, *config);
 }
 
@@ -192,7 +192,7 @@ void TRTParser::inference(vector<cv::Mat> images, bool softMax) {
 	}
 }
 
-bool saveTRTEngine(string onnxEnginePath) {
+bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize) {
 	ifstream onnxFile(onnxEnginePath, ios::binary);
 	if (!onnxFile.good()) {
 		cout << "ERROR: " << onnxEnginePath << " not found! \n";
@@ -227,7 +227,7 @@ bool saveTRTEngine(string onnxEnginePath) {
 		cerr << "ERROR: Could not open engine file: " << TRTFilename << endl;
 		return false;
 	}
-	nvinfer1::ICudaEngine* engine = getOnnxEngine(onnxEnginePath);
+	nvinfer1::ICudaEngine* engine = getOnnxEngine(onnxEnginePath, max_batchsize);
 	if (engine == nullptr) {
 		cerr << "ERROR: Could not get onnx engine" << endl;
 		return false;

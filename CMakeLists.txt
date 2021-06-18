@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 project(TensorRT_Parser)
 
-add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -12,8 +10,8 @@ include_directories(/usr/local/cuda/include)
 link_directories(/usr/local/cuda/lib64)
 
 #TensorRT
-include_directories(/home/tanphatnguyen/TensorRT-7.2.3.4/include)
-link_directories(/home/tanphatnguyen/TensorRT-7.2.3.4/lib)
+include_directories(/home/phatnt/TensorRT-7.2.3.4/include)
+link_directories(/home/phatnt/TensorRT-7.2.3.4/lib)
 
 find_package(OpenCV REQUIRED)
 

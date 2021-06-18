@@ -15,7 +15,6 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
 
 #include <NvInferRuntime.h>
 #include <NvInfer.h>
@@ -25,8 +24,6 @@
 using namespace std;
 
 #define MAX_WORKSPACE (1 << 30)
-#define MAX_BATCHSIZE 10
-
 
 struct TRTDestroy
 {
@@ -42,8 +39,6 @@ struct TRTDestroy
 
 template< class T >
 using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
-
-
 
 class TRTParser {
 private:
@@ -63,7 +58,7 @@ public:
 	void inference(vector<cv::Mat> image, bool softMax=false);
 };
 
-nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath);
-bool saveTRTEngine(string onnxEnginePath);
+nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize);
+bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize);
 
 #endif //TRT_PARSER_H
