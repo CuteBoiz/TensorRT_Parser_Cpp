@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <typeinfo>
 #include <memory>
+#include <stdio.h>
 
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -23,7 +24,7 @@
 
 using namespace std;
 
-#define MAX_WORKSPACE (1 << 30)
+#define MAX_WORKSPACE_SIZE (1 << 30)
 
 struct TRTDestroy
 {
@@ -58,7 +59,7 @@ public:
 	void inference(vector<cv::Mat> image, bool softMax=false);
 };
 
-nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize);
-bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize);
+nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
+bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
 
 #endif //TRT_PARSER_H

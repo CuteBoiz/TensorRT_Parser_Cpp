@@ -8,8 +8,7 @@ public:
 			cout << msg << endl;
 		}
 	}
-	nvinfer1::ILogger& getTRTLogger()
-	{
+	nvinfer1::ILogger& getTRTLogger(){
 		return *this;
 	}
 } gLogger;
@@ -28,7 +27,6 @@ bool TRTParser::init(string path) {
 	if (this->engine == nullptr || this->context == nullptr) {
 		return false;
 	}
-
 	return true;
 }
 
@@ -47,7 +45,7 @@ size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 	return size;
 }
 
-nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize) {
+nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
 	nvinfer1::IBuilder*builder{ nvinfer1::createInferBuilder(gLogger) };
 	const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
 	nvinfer1::INetworkDefinition* network{ builder->createNetworkV2(explicitBatch) };
@@ -59,12 +57,34 @@ nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize) {
 		cerr << "ERROR: Could not parse the engine from " << onnxPath << endl;
 		return nullptr;
 	}
-	config->setMaxWorkspaceSize(MAX_WORKSPACE);
-	if (builder->platformHasFastFp16())
-	{
+	config->setMaxWorkspaceSize(MAX_WORKSPACE_SIZE);
+	cout << fp16 << endl;
+	if (fp16 && builder->platformHasFastFp16()){
+		cout << "Exporting model in FP16 Fast Mode\n";
 		config->setFlag(nvinfer1::BuilderFlag::kFP16);
 	}
+	else{
+		cout << "Exporting model in FP32 Mode\n";
+	}
 	builder->setMaxBatchSize(max_batchsize);
+
+
+	if (dynamic_shape){
+		if (input_tensor_name == ""){
+			cerr << "ERROR: Input tensor name is empty \n";
+			return nullptr;
+		}
+		if (dimension.size() != 3){
+			cerr << "ERROR: Dimension of dynamic shape must be 3 \n";
+			return nullptr;
+		}
+		auto profile = builder->createOptimizationProfile();
+		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, dimension.at(0), dimension.at(1), dimension.at(2)});
+		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{max(int(max_batchsize/2),1), dimension.at(0), dimension.at(1), dimension.at(2)});
+		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{max_batchsize, dimension.at(0), dimension.at(1), dimension.at(2)});
+		config->addOptimizationProfile(profile);
+	}
+
 	return builder->buildEngineWithConfig(*network, *config);
 }
 
@@ -75,8 +95,7 @@ nvinfer1::ICudaEngine* TRTParser::getTRTEngine() {
 		size_t size{ 0 };
 
 		ifstream file(this->enginePath, ios::binary);
-		if (file.good())
-		{
+		if (file.good()){
 			file.seekg(0, file.end);
 			size = file.tellg();
 			file.seekg(0, file.beg);
@@ -192,7 +211,7 @@ void TRTParser::inference(vector<cv::Mat> images, bool softMax) {
 	}
 }
 
-bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize) {
+bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
 	ifstream onnxFile(onnxEnginePath, ios::binary);
 	if (!onnxFile.good()) {
 		cout << "ERROR: " << onnxEnginePath << " not found! \n";
@@ -227,14 +246,16 @@ bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize) {
 		cerr << "ERROR: Could not open engine file: " << TRTFilename << endl;
 		return false;
 	}
-	nvinfer1::ICudaEngine* engine = getOnnxEngine(onnxEnginePath, max_batchsize);
+	nvinfer1::ICudaEngine* engine = getOnnxEngine(onnxEnginePath, max_batchsize, fp16, input_tensor_name, dimension, dynamic_shape);
 	if (engine == nullptr) {
 		cerr << "ERROR: Could not get onnx engine" << endl;
+		remove(TRTFilename.c_str());
 		return false;
 	}
 	TRTUniquePtr<nvinfer1::IHostMemory> serializedEngine{ engine->serialize() };
 	if (serializedEngine == nullptr)
 	{
+		remove(TRTFilename.c_str());
 		cerr << "ERROR: Could not serialized engine \n";
 		return false;
 	}

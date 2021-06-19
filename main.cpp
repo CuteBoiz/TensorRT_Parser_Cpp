@@ -27,21 +27,33 @@ int main(int argc,char** argv){
 	[mode] 	-e : export onnx to trt
 				[model path]
 				[max batchsize]
+				[fp16]
+
+			-ed: export dynamic shape
+				[model path]
+				[max batchsize]
+				[input tensor name]
+				[dimension 1]
+				[dimension 2]
+				[dimension 3]
+				[fp16]
+				
 			-i : infer onnx or trt model.
 				[model path]
 				[images folder path]
 				[model image size]
 				[batch size]
+
 	*/
 	static string enginePath;
 	static unsigned max_batchsize = 0;
 	static string folderPath;
 	static unsigned modelImageSize = 0;
 	static unsigned batchSize = 0;
+	static bool fp16 = false;
 
-
-	if (argc == 4 && std::string(argv[1]) == "-e"){
-		enginePath = argv[2];
+	if ((argc == 4 || argc == 5) && std::string(argv[1]) == "-e"){
+		enginePath = string(argv[2]);
 		max_batchsize = stoi(argv[3]);
 		if (max_batchsize <= 0){
 			cerr <<"ERROR: "<< "max batchsize must be more than 0! \n";
@@ -54,14 +66,57 @@ int main(int argc,char** argv){
 			return -1;
 		}
 		f.close();
-		cout << enginePath << " Found!, Try To Exporting Model ... \n";
+		if (argc == 5 && argv[5] == "fp16"){
+			fp16 = true;
+		}
 		if (enginePath.substr(enginePath.find_last_of(".") + 1) == "onnx"){
-			if (exportTRTEngine(enginePath, max_batchsize)){
+			if (exportTRTEngine(enginePath, max_batchsize, fp16)){
 				cout << "Export to TensorRT Success! \n"; 
 				return 0;
 			}
 			else{
 				cerr << "ERROR: Export Failed! \n"; 
+				return -1;
+			}
+		}
+	}
+	else if ((argc == 8 || argc == 9) && std::string(argv[1]) == "-ed"){
+		enginePath = string(argv[2]);
+		max_batchsize = stoi(argv[3]);
+		string input_tensor_name = string(argv[4]);
+		vector<unsigned> dimension;
+		for (unsigned i = 5; i < 8; i++){
+			if (stoi(argv[i]) > 0){
+				dimension.emplace_back(stoi(argv[i]));
+			}
+			else{
+				cerr << "ERROR: Dimension must be more than 0 \n";
+				return -1;
+			}
+		}
+		if (max_batchsize <= 0){
+			cerr <<"ERROR: "<< "max batchsize must be more than 0! \n";
+			return -1;
+		}
+		std::ifstream f(enginePath);
+		if (!f.good()){
+			cerr <<"ERROR: "<< enginePath << " not found! \n";
+			f.close();
+			return -1;
+		}
+		f.close();
+		if (argc == 9 && (string(argv[8]) == "fp16" || string(argv[8]) == "FP16")){
+			fp16 = true;
+		}
+		if (enginePath.substr(enginePath.find_last_of(".") + 1) == "onnx"){
+			if (exportTRTEngine(enginePath, max_batchsize, fp16, input_tensor_name, dimension, true)){
+				cout << "Export to TensorRT Success! \n";
+				dimension.clear();
+				return 0;
+			}
+			else{
+				cerr << "ERROR: Export Failed! \n";
+				dimension.clear();
 				return -1;
 			}
 		}
@@ -139,7 +194,10 @@ int main(int argc,char** argv){
 		cout << "Total inferenced image number: " << nrof_iamges << endl;
 	}
 	else{
-		cerr << "Undefined arguments. \n [-e] [enginePath] [max batchsize] to export trt model \n [-i] [enginePath] [imagesFolderPath] [modelImageSize] [batchSize]. to infer trt model \n";
+		cout << "Undefined arguments. \n";
+		cout <<	"[-e] [enginePath] [max batchsize] ([fp16]) to export trt model \n ";
+		cout << "[-ed][enginePath] [max batchsize] [input tensor name] [d1] [d2] [d3] ([fp16]) to export dynamic shape trt model \n";
+		cout << "[-i] [enginePath] [imagesFolderPath] [modelImageSize] [batchSize]. to infer trt model \n";
 		return -1;
 	}
 	
