@@ -61,10 +61,10 @@ make
 ## V. Inference:
   - Inference:
     ```sh
-    ./main -i "model_path" "images_folder_path" "model_image_size" "batch_size"
+    ./main -i "model_path" "images_folder_path" "batch_size"
     ```
 
   - Example:
     ```sh
-    ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 128 10
+    ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 10
     ```

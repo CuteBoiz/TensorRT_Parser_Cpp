@@ -41,7 +41,6 @@ int main(int argc,char** argv){
 			-i : infer onnx or trt model.
 				[model path]
 				[images folder path]
-				[model image size]
 				[batch size]
 
 	*/
@@ -55,6 +54,7 @@ int main(int argc,char** argv){
 	if ((argc == 4 || argc == 5) && std::string(argv[1]) == "-e"){
 		enginePath = string(argv[2]);
 		max_batchsize = stoi(argv[3]);
+
 		if (max_batchsize <= 0){
 			cerr <<"ERROR: "<< "max batchsize must be more than 0! \n";
 			return -1;
@@ -85,6 +85,7 @@ int main(int argc,char** argv){
 		max_batchsize = stoi(argv[3]);
 		string input_tensor_name = string(argv[4]);
 		vector<unsigned> dimension;
+
 		for (unsigned i = 5; i < 8; i++){
 			if (stoi(argv[i]) > 0){
 				dimension.emplace_back(stoi(argv[i]));
@@ -121,15 +122,11 @@ int main(int argc,char** argv){
 			}
 		}
 	} 
-	else if (argc == 6 && std::string(argv[1]) == "-i"){
-		enginePath = argv[2];
-		folderPath = argv[3];
-		modelImageSize = atoi(argv[4]);
-		batchSize = atoi(argv[5]);
-		if (modelImageSize <= 0) {
-			cerr << "ERROR: model image size must larger than 0 \n";
-			return -1;
-		}
+	else if (argc == 5 && std::string(argv[1]) == "-i"){
+		enginePath = string(argv[2]);
+		folderPath = string(argv[3]);
+		batchSize = stoi(argv[4]);
+
 		if (batchSize <= 0){
 			cerr << "ERROR: batch size must larger than 0 \n";
 			return -1;
@@ -139,27 +136,30 @@ int main(int argc,char** argv){
 		}
 		cv::Mat image;
 		std::ifstream f(enginePath);
+		std::vector<std::string> fileNames;
+		std::vector<cv::Mat> images;
+		TRTParser engine;
+		unsigned nrof_iamges = 0;
+		unsigned i = 0;
+
 		if (!f.good()){
 			cerr <<"ERROR: " <<enginePath << " not found! \n";
+			f.close();
 			return -1;
 		}
 		else {
+			f.close();
 			cout << enginePath << " Found!, Parsing Model ... \n";
 		}
-		std::vector<std::string> fileNames;
 		if (read_files_in_dir(folderPath.c_str(), fileNames) < 0) {
 	        std::cout << "read_files_in_dir failed." << std::endl;
 	        return -1;
-	    }
-		
-		TRTParser engine;
+	    }		
 		if (!engine.init(enginePath)){
 			cerr << "ERROR: Could not parse tensorRT engine! \n";
 			return -1;
 		}
-		unsigned nrof_iamges = 0;
-		unsigned i = 0;
-		std::vector<cv::Mat> images;
+		
 		for (unsigned f = 0; f < (unsigned)fileNames.size(); f += i) {
 			unsigned index = 0;
 			for (i = 0; index < batchSize && (f + i) < (unsigned)fileNames.size(); i++) {
@@ -167,8 +167,6 @@ int main(int argc,char** argv){
 				if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
 					cout << fileNames[f + i] << endl;
 					cv::Mat image = cv::imread(folderPath + fileNames[f + i]);
-					cv::Size dim = cv::Size(modelImageSize, modelImageSize);
-					cv::resize(image, image, dim, cv::INTER_AREA);
 					images.emplace_back(image);
 					index++;
 					nrof_iamges++;
@@ -192,12 +190,13 @@ int main(int argc,char** argv){
 			images.clear();
 		}
 		cout << "Total inferenced image number: " << nrof_iamges << endl;
+		fileNames.clear();
 	}
 	else{
 		cout << "Undefined arguments. \n";
 		cout <<	"[-e] [enginePath] [max batchsize] ([fp16]) to export trt model \n ";
 		cout << "[-ed][enginePath] [max batchsize] [input tensor name] [d1] [d2] [d3] ([fp16]) to export dynamic shape trt model \n";
-		cout << "[-i] [enginePath] [imagesFolderPath] [modelImageSize] [batchSize]. to infer trt model \n";
+		cout << "[-i] [enginePath] [imagesFolderPath] [batchSize] to infer trt model \n";
 		return -1;
 	}
 	
