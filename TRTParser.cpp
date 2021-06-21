@@ -58,7 +58,7 @@ nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize, bo
 		return nullptr;
 	}
 	config->setMaxWorkspaceSize(MAX_WORKSPACE_SIZE);
-	cout << fp16 << endl;
+	
 	if (fp16 && builder->platformHasFastFp16()){
 		cout << "Exporting model in FP16 Fast Mode\n";
 		config->setFlag(nvinfer1::BuilderFlag::kFP16);
