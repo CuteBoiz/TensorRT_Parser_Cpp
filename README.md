@@ -68,3 +68,10 @@ make
     ```sh
     ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 10
     ```
+    
+## VI. TO-DO
+
+- **Fix split image on GPU bug.**
+- Check multiple outputs model.
+- Simplify the main process.
+- Return result vectors.
