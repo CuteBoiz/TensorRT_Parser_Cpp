@@ -125,12 +125,12 @@ void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const n
 		cv::cuda::GpuMat gpu_frame;
 		gpu_frame.upload(frame[i]);
 		uint32_t input_width, input_height, channels;
-		if (dims.d[3] == 3) { //chanel last
+		if (dims.d[3] == 3 || dims.d[3] == 1) { //chanel last
 			input_width = dims.d[1];
 			input_height = dims.d[2];
 			channels = dims.d[3];
 		}
-		else if (dims.d[1] == 3) { //chanel first
+		else if (dims.d[1] == 3 || dims.d[1] == 1) { //chanel first
 			input_width = dims.d[2];
 			input_height = dims.d[3];
 			channels = dims.d[1];
