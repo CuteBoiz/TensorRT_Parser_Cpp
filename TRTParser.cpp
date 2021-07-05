@@ -144,12 +144,17 @@ void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const n
 		resized.convertTo(flt_image, CV_32FC3, 1.f / 255.f);
 		cv::cuda::subtract(flt_image, cv::Scalar(0.485f, 0.456f, 0.406f), flt_image, cv::noArray(), -1);
 		cv::cuda::divide(flt_image, cv::Scalar(0.229f, 0.224f, 0.225f), flt_image, 1, -1);
-		vector< cv::cuda::GpuMat > chw;
-		for (size_t j = 0; j < channels; ++j)
-		{
-			chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i * channels + j) * input_width * input_height));
+		if (channels == 3){
+			vector< cv::cuda::GpuMat > chw;
+			for (size_t j = 0; j < channels; ++j)
+			{
+				chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i * channels + j) * input_width * input_height));
+			}
+			cv::cuda::split(flt_image, chw);
 		}
-		cv::cuda::split(flt_image, chw);
+		else if (channels == 1){
+			cudaMemcpyAsync(gpu_input, flt_image.ptr<float>(), flt_image.rows*flt_image.step, cudaMemcpyDeviceToDevice);
+		}
 	}
 }
 void TRTParser::postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims, bool softMax) {
