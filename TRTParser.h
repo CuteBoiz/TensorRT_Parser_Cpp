@@ -43,11 +43,10 @@ using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
 
 class TRTParser {
 private:
-	string enginePath;
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
 
-	nvinfer1::ICudaEngine* getTRTEngine();
+	nvinfer1::ICudaEngine* getTRTEngine(string enginePath);
 	size_t getSizeByDim(const nvinfer1::Dims& dims);
 	void preprocessImage(vector<cv::Mat> image, float* gpu_input, const nvinfer1::Dims& dims);
 	void postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims, bool softMax);
