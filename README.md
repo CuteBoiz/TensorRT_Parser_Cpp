@@ -71,7 +71,8 @@ make
     
 ## VI. TO-DO
 
-- **Fix split image on GPU bug.**
-- Check multiple outputs model.
-- Simplify the main process.
-- Return result vectors.
+- [X] **Fix split image on GPU bug.** 
+- [ ] Check multiple inputs model.
+- [ ] Check multiple outputs model.
+- [X] Simplify the main process. 
+- [ ] Return result vectors. 
