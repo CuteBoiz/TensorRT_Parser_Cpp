@@ -14,15 +14,12 @@ public:
 } gLogger;
 
 TRTParser::TRTParser() {
-	enginePath = " ";
 	engine = nullptr;
 	context = nullptr;
 }
 
 bool TRTParser::init(string path) {
-	this->enginePath = path;
-
-	this->engine = this->getTRTEngine();
+	this->engine = this->getTRTEngine(path);
 	this->context = this->engine->createExecutionContext();
 	if (this->engine == nullptr || this->context == nullptr) {
 		return false;
@@ -38,8 +35,7 @@ TRTParser::~TRTParser() {
 size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 {
 	size_t size = 1;
-	for (size_t i = 0; i < dims.nbDims; ++i)
-	{
+	for (size_t i = 0; i < dims.nbDims; ++i)	{
 		size *= dims.d[i];
 	}
 	return size;
@@ -88,32 +84,25 @@ nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize, bo
 	return builder->buildEngineWithConfig(*network, *config);
 }
 
-nvinfer1::ICudaEngine* TRTParser::getTRTEngine() {
-	string fileExtention = this->enginePath.substr(this->enginePath.find_last_of(".") + 1);
-	if (fileExtention == "trt") {
-		vector<char> trtModelStream_;
-		size_t size{ 0 };
+nvinfer1::ICudaEngine* TRTParser::getTRTEngine(string enginePath) {
+	vector<char> trtModelStream_;
+	size_t size{ 0 };
 
-		ifstream file(this->enginePath, ios::binary);
-		if (file.good()){
-			file.seekg(0, file.end);
-			size = file.tellg();
-			file.seekg(0, file.beg);
-			trtModelStream_.resize(size);
-			file.read(trtModelStream_.data(), size);
-			file.close();
-		}
-		nvinfer1::IRuntime* runtime = nvinfer1::createInferRuntime(gLogger);
-		if (runtime == nullptr) {
-			cerr << "ERROR: Could not create InferRuntime! \n";
-			return nullptr;
-		}
-		return runtime->deserializeCudaEngine(trtModelStream_.data(), size, nullptr);
+	ifstream file(enginePath, ios::binary);
+	if (file.good()){
+		file.seekg(0, file.end);
+		size = file.tellg();
+		file.seekg(0, file.beg);
+		trtModelStream_.resize(size);
+		file.read(trtModelStream_.data(), size);
+		file.close();
 	}
-	else {
-		cerr << "ERROR: Engine file extension must be .trt \n";
+	nvinfer1::IRuntime* runtime = nvinfer1::createInferRuntime(gLogger);
+	if (runtime == nullptr) {
+		cerr << "ERROR: Could not create InferRuntime! \n";
 		return nullptr;
 	}
+	return runtime->deserializeCudaEngine(trtModelStream_.data(), size, nullptr);
 }
 
 void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const nvinfer1::Dims& dims) {
@@ -146,8 +135,7 @@ void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const n
 		cv::cuda::divide(flt_image, cv::Scalar(0.229f, 0.224f, 0.225f), flt_image, 1, -1);
 		if (channels == 3){
 			vector< cv::cuda::GpuMat > chw;
-			for (size_t j = 0; j < channels; ++j)
-			{
+			for (size_t j = 0; j < channels; ++j){
 				chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i * channels + j) * input_width * input_height));
 			}
 			cv::cuda::split(flt_image, chw);
@@ -183,7 +171,6 @@ void TRTParser::postprocessResult(float *gpu_output, int size, const nvinfer1::D
 }
 
 void TRTParser::inference(vector<cv::Mat> images, bool softMax) {
-
 	vector< nvinfer1::Dims > input_dims;
 	vector< nvinfer1::Dims > output_dims;
 	vector< void* > buffers(this->engine->getNbBindings());
@@ -197,15 +184,13 @@ void TRTParser::inference(vector<cv::Mat> images, bool softMax) {
 		else
 			output_dims.emplace_back(this->engine->getBindingDimensions(i));
 	}
-	if (input_dims.empty() || output_dims.empty())
-	{
+	if (input_dims.empty() || output_dims.empty()){
 		cerr << "ERROR: Expect at least one input and one output for network \n";
 		exit(-1);
 	}
 
 	this->preprocessImage(images, (float*)buffers[0], input_dims[0]);
 	this->context->enqueue(images.size(), buffers.data(), 0, nullptr);
-
 	this->postprocessResult((float *)buffers[1], images.size(), output_dims[0], softMax);
 
 	input_dims.clear();
@@ -246,8 +231,7 @@ bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize, bool fp16, s
 	fclose(dest);
 
 	std::ofstream engineFile(TRTFilename, std::ios::binary);
-	if (!engineFile)
-	{
+	if (!engineFile){
 		cerr << "ERROR: Could not open engine file: " << TRTFilename << endl;
 		return false;
 	}
@@ -258,8 +242,7 @@ bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize, bool fp16, s
 		return false;
 	}
 	TRTUniquePtr<nvinfer1::IHostMemory> serializedEngine{ engine->serialize() };
-	if (serializedEngine == nullptr)
-	{
+	if (serializedEngine == nullptr)	{
 		remove(TRTFilename.c_str());
 		cerr << "ERROR: Could not serialized engine \n";
 		return false;
