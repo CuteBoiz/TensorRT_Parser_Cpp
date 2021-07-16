@@ -10,8 +10,8 @@ include_directories(/usr/local/cuda/include)
 link_directories(/usr/local/cuda/lib64)
 
 #TensorRT
-include_directories(/home/phatnt/TensorRT-7.2.3.4/include)
-link_directories(/home/phatnt/TensorRT-7.2.3.4/lib)
+include_directories(/home/phatnt/TensorRT/include)
+link_directories(/home/phatnt/TensorRT/lib)
 
 find_package(OpenCV REQUIRED)
 

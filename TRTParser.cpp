@@ -1,29 +1,17 @@
 #include "TRTParser.h"
 
-class Logger : public nvinfer1::ILogger
-{
-public:
-	void log(Severity severity, const char* msg) override {
-		if ((severity == Severity::kERROR) || (severity == Severity::kINTERNAL_ERROR)) {
-			cout << msg << endl;
-		}
-	}
-	nvinfer1::ILogger& getTRTLogger(){
-		return *this;
-	}
-} gLogger;
 
 TRTParser::TRTParser() {
 	engine = nullptr;
 	context = nullptr;
 }
 
-bool TRTParser::init(string path) {
-	this->engine = this->getTRTEngine(path);
-	this->context = this->engine->createExecutionContext();
-	if (this->engine == nullptr || this->context == nullptr) {
+bool TRTParser::init(string enginePath) {
+	this->engine = this->loadTRTEngine(enginePath);
+	if (this->engine == nullptr) {
 		return false;
 	}
+	this->context = this->engine->createExecutionContext();
 	return true;
 }
 
@@ -41,50 +29,7 @@ size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 	return size;
 }
 
-nvinfer1::ICudaEngine* getOnnxEngine(string onnxPath, unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
-	nvinfer1::IBuilder*builder{ nvinfer1::createInferBuilder(gLogger) };
-	const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-	nvinfer1::INetworkDefinition* network{ builder->createNetworkV2(explicitBatch) };
-
-	TRTUniquePtr<nvonnxparser::IParser> parser{ nvonnxparser::createParser(*network, gLogger) };
-	TRTUniquePtr<nvinfer1::IBuilderConfig> config{ builder->createBuilderConfig() };
-	if (!parser->parseFromFile(onnxPath.c_str(), static_cast<int>(nvinfer1::ILogger::Severity::kINFO)))
-	{
-		cerr << "ERROR: Could not parse the engine from " << onnxPath << endl;
-		return nullptr;
-	}
-	config->setMaxWorkspaceSize(MAX_WORKSPACE_SIZE);
-	
-	if (fp16 && builder->platformHasFastFp16()){
-		cout << "Exporting model in FP16 Fast Mode\n";
-		config->setFlag(nvinfer1::BuilderFlag::kFP16);
-	}
-	else{
-		cout << "Exporting model in FP32 Mode\n";
-	}
-	builder->setMaxBatchSize(max_batchsize);
-
-
-	if (dynamic_shape){
-		if (input_tensor_name == ""){
-			cerr << "ERROR: Input tensor name is empty \n";
-			return nullptr;
-		}
-		if (dimension.size() != 3){
-			cerr << "ERROR: Dimension of dynamic shape must be 3 \n";
-			return nullptr;
-		}
-		auto profile = builder->createOptimizationProfile();
-		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, dimension.at(0), dimension.at(1), dimension.at(2)});
-		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{max(int(max_batchsize/2),1), dimension.at(0), dimension.at(1), dimension.at(2)});
-		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{max_batchsize, dimension.at(0), dimension.at(1), dimension.at(2)});
-		config->addOptimizationProfile(profile);
-	}
-
-	return builder->buildEngineWithConfig(*network, *config);
-}
-
-nvinfer1::ICudaEngine* TRTParser::getTRTEngine(string enginePath) {
+nvinfer1::ICudaEngine* TRTParser::loadTRTEngine(string enginePath) {
 	vector<char> trtModelStream_;
 	size_t size{ 0 };
 
@@ -96,6 +41,11 @@ nvinfer1::ICudaEngine* TRTParser::getTRTEngine(string enginePath) {
 		trtModelStream_.resize(size);
 		file.read(trtModelStream_.data(), size);
 		file.close();
+	}
+	else{
+		cerr << "ERROR: Could not read engine! \n";
+		file.close();
+		return nullptr;
 	}
 	nvinfer1::IRuntime* runtime = nvinfer1::createInferRuntime(gLogger);
 	if (runtime == nullptr) {
@@ -201,19 +151,59 @@ void TRTParser::inference(vector<cv::Mat> images, bool softMax) {
 	}
 }
 
-bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
-	ifstream onnxFile(onnxEnginePath, ios::binary);
-	if (!onnxFile.good()) {
+nvinfer1::ICudaEngine* loadOnnxEngine(string onnxPath, unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
+	nvinfer1::IBuilder*builder{ nvinfer1::createInferBuilder(gLogger) };
+	const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
+	nvinfer1::INetworkDefinition* network{ builder->createNetworkV2(explicitBatch) };
+
+	TRTUniquePtr<nvonnxparser::IParser> parser{ nvonnxparser::createParser(*network, gLogger) };
+	TRTUniquePtr<nvinfer1::IBuilderConfig> config{ builder->createBuilderConfig() };
+	if (!parser->parseFromFile(onnxPath.c_str(), static_cast<int>(nvinfer1::ILogger::Severity::kINFO))){
+		cerr << "ERROR: Could not parse the engine from " << onnxPath << endl;
+		return nullptr;
+	}
+	config->setMaxWorkspaceSize(MAX_WORKSPACE_SIZE);
+	
+	if (fp16 && builder->platformHasFastFp16()){
+		cout << "Exporting model in FP16 Fast Mode\n";
+		config->setFlag(nvinfer1::BuilderFlag::kFP16);
+	}
+	else{
+		cout << "Exporting model in FP32 Mode\n";
+	}
+	builder->setMaxBatchSize(max_batchsize);
+
+	if (dynamic_shape){
+		if (input_tensor_name == ""){
+			cerr << "ERROR: Input tensor name is empty \n";
+			return nullptr;
+		}
+		if (dimension.size() != 3){
+			cerr << "ERROR: Dimension of dynamic shape must be 3 \n";
+			return nullptr;
+		}
+		auto profile = builder->createOptimizationProfile();
+		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, dimension.at(0), dimension.at(1), dimension.at(2)});
+		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{max(int(max_batchsize/2),1), dimension.at(0), dimension.at(1), dimension.at(2)});
+		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{max_batchsize, dimension.at(0), dimension.at(1), dimension.at(2)});
+		config->addOptimizationProfile(profile);
+	}
+
+	return builder->buildEngineWithConfig(*network, *config);
+}
+
+
+bool convertOnnx2Trt(string onnxEnginePath, unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
+	if (!checkFileIfExist(onnxEnginePath)) {
 		cout << "ERROR: " << onnxEnginePath << " not found! \n";
 		return false;
 	}
 	else {
-		cout << onnxEnginePath << " found!, Exporting TensorRT Engine \n";
+		cout << onnxEnginePath << " found!, Converting to TensorRT Engine \n";
 	}
 	size_t lastindex = onnxEnginePath.find_last_of(".");
 	string TRTFilename = onnxEnginePath.substr(0, lastindex) + ".trt";
-	ifstream file(TRTFilename, ios::binary);
-	if (file.good()) {
+	if (checkFileIfExist(TRTFilename)) {
 		cout << TRTFilename << " is already exist! \n";
 		return true;
 	}
@@ -233,9 +223,10 @@ bool exportTRTEngine(string onnxEnginePath, unsigned max_batchsize, bool fp16, s
 	std::ofstream engineFile(TRTFilename, std::ios::binary);
 	if (!engineFile){
 		cerr << "ERROR: Could not open engine file: " << TRTFilename << endl;
+		remove(TRTFilename.c_str());
 		return false;
 	}
-	nvinfer1::ICudaEngine* engine = getOnnxEngine(onnxEnginePath, max_batchsize, fp16, input_tensor_name, dimension, dynamic_shape);
+	nvinfer1::ICudaEngine* engine = loadOnnxEngine(onnxEnginePath, max_batchsize, fp16, input_tensor_name, dimension, dynamic_shape);
 	if (engine == nullptr) {
 		cerr << "ERROR: Could not get onnx engine" << endl;
 		remove(TRTFilename.c_str());
