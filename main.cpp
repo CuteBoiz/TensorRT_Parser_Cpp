@@ -32,20 +32,20 @@ int main(int argc,char** argv){
 
 	*/
 	
-	if ((argc == 4 || argc == 5) && string(argv[1]) == "-e"){
+	if ((argc >= 4 && argc <= 5) && string(argv[1]) == "-e"){
 		if(convert(argc, argv)){
 			return 0; 
 		}
 		return -1;
 	}
-	else if ((argc == 8 || argc == 9) && string(argv[1]) == "-ed"){
+	else if ((argc >= 8 && argc <= 9) && string(argv[1]) == "-ed"){
 		if (convertWithDynamicInputShape(argc, argv)){
 			return 0;
 		}
 		return -1;
 		
 	} 
-	else if (argc == 5 && string(argv[1]) == "-i"){
+	else if ((argc >= 5 && argc <= 6)&& string(argv[1]) == "-i"){
 		if (infer(argc, argv)){
 			return 0;
 		}
@@ -78,7 +78,7 @@ bool check(unsigned maxBatchSize, string enginePath){
 bool convert(int argc, char** argv){
 	string enginePath = string(argv[2]);
 	unsigned maxBatchSize = stoi(argv[3]);
-	bool fp16 = (argc == 5 && argv[5] == "fp16") ? true : false;
+	bool fp16 = (argc == 5 && string(argv[4]) == "fp16") ? true : false;
 	if (!check(maxBatchSize, enginePath)) return -1;
 	
 	if (enginePath.substr(enginePath.find_last_of(".") + 1) == "onnx"){
@@ -100,6 +100,7 @@ bool convertWithDynamicInputShape(int argc, char **argv){
 	bool fp16 = (argc == 9 && (string(argv[8]) == "fp16")) ? true : false;
 	if (!check(maxBatchSize, enginePath)) return false;
 	vector<unsigned> dimension;
+	
 	for (unsigned i = 5; i < 8; i++){
 		if (stoi(argv[i]) > 0){
 			dimension.emplace_back(stoi(argv[i]));
@@ -126,6 +127,7 @@ bool infer(int argc, char **argv){
 	string enginePath = string(argv[2]);
 	string folderPath = string(argv[3]);
 	unsigned batchSize = stoi(argv[4]);
+	bool softmax = (argc == 6 && (string(argv[5]) == "softmax")) ? true : false;
 	if (!check(batchSize, enginePath)) return -1;
 	
 	if (folderPath[folderPath.length() - 1] != '/' && folderPath[folderPath.length() -1] != '\\') {
@@ -166,7 +168,10 @@ bool infer(int argc, char **argv){
 			continue;
 		}
 		auto start = chrono::system_clock::now();
-		engine.inference(images, true);
+		if (!engine.inference(images, softmax)){
+			cerr << "Inference error \n";
+			return false;
+		}
 		auto end = chrono::system_clock::now();
 		cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
 		

@@ -59,18 +59,18 @@ private:
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
 
-	nvinfer1::ICudaEngine* loadTRTEngine(string enginePath);
+	nvinfer1::ICudaEngine* loadTRTEngine(const string enginePath);
 	size_t getSizeByDim(const nvinfer1::Dims& dims);
 	void preprocessImage(vector<cv::Mat> image, float* gpu_input, const nvinfer1::Dims& dims);
-	void postprocessResult(float *gpu_output, int size, const nvinfer1::Dims &dims, bool softMax);
+	vector<float> postprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size, const bool softMax);
 public:
 	TRTParser();
-	bool init(string enginePath);
+	bool init(const string enginePath);
 	~TRTParser();
-	void inference(vector<cv::Mat> image, bool softMax=false);
+	bool inference(vector<cv::Mat> image, bool softMax=false);
 };
 
-nvinfer1::ICudaEngine* loadOnnxEngine(string onnxPath, unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
-bool convertOnnx2Trt(string onnxEnginePath, unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
+nvinfer1::ICudaEngine* loadOnnxEngine(const string onnxPath, const unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
+bool convertOnnx2Trt(const string onnxEnginePath, const unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
 
 #endif //TRT_PARSER_H

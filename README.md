@@ -61,18 +61,19 @@ make
 ## V. Inference:
   - Inference:
     ```sh
-    ./main -i "model_path" "images_folder_path" "batch_size"
+    ./main -i "model_path" "images_folder_path" "batch_size" ("softmax")
     ```
 
   - Example:
     ```sh
     ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 10
+    ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 1 softmax
     ```
     
 ## VI. TO-DO
 
 - [X] **Fix split image on GPU bug.** 
 - [ ] Check multiple inputs model.
-- [ ] Check multiple outputs model.
+- [x] Check multiple outputs model.
 - [X] Simplify the main process. 
-- [ ] Return result vectors. 
+- [x] Return result vectors. 
