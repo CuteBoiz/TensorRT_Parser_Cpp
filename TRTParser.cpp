@@ -30,60 +30,66 @@ size_t TRTParser::getSizeByDim(const nvinfer1::Dims& dims)
 }
 
 nvinfer1::ICudaEngine* TRTParser::loadTRTEngine(const string enginePath) {
-	vector<char> trtModelStream_;
-	size_t size{ 0 };
-
-	ifstream file(enginePath, ios::binary);
-	if (file.good()){
-		file.seekg(0, file.end);
-		size = file.tellg();
-		file.seekg(0, file.beg);
-		trtModelStream_.resize(size);
-		file.read(trtModelStream_.data(), size);
-		file.close();
-	}
-	else{
+	ifstream gieModelStream(enginePath, ios::binary);
+	if (!gieModelStream.good()){
 		cerr << "ERROR: Could not read engine! \n";
-		file.close();
+		gieModelStream.close();
 		return nullptr;
 	}
+	gieModelStream.seekg(0, ios::end);
+	size_t modelSize = gieModelStream.tellg();
+	gieModelStream.seekg(0, ios::beg);
+
+	void* modelData = malloc(modelSize);
+	if(!modelData)
+	{
+		cerr << "ERROR: Could not allocate memory for onnx engine! \n";
+		gieModelStream.close();
+		return nullptr;
+	}
+	gieModelStream.read((char*)modelData, modelSize);
+	gieModelStream.close();
+
 	nvinfer1::IRuntime* runtime = nvinfer1::createInferRuntime(gLogger);
 	if (runtime == nullptr) {
 		cerr << "ERROR: Could not create InferRuntime! \n";
 		return nullptr;
 	}
-	return runtime->deserializeCudaEngine(trtModelStream_.data(), size, nullptr);
+	return runtime->deserializeCudaEngine(modelData, modelSize, nullptr);
 }
 
-void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const nvinfer1::Dims& dims) {
+void TRTParser::preprocessImage(vector<cv::Mat> images, float* gpu_input, const nvinfer1::Dims& dims) {
 	uint32_t input_width, input_height, channels;
-	if (dims.d[3] == 3 || dims.d[3] == 1) { //chanel last
+	bool channel_first = false;
+	if (dims.d[3] == 3 || dims.d[3] == 1) {
 		input_width = dims.d[1];
 		input_height = dims.d[2];
 		channels = dims.d[3];
+		channel_first = false;
 	}
-	else if (dims.d[1] == 3 || dims.d[1] == 1) { //chanel first
+	else if (dims.d[1] == 3 || dims.d[1] == 1) { 
 		input_width = dims.d[2];
 		input_height = dims.d[3];
 		channels = dims.d[1];
+		channel_first = true;
 	}
 	else {
 		cerr << "Input shape not valid!\n";
 		exit(-1);
 	}
 	auto input_size = cv::Size(input_width, input_height);
-	
-	for (int i = 0; i < frame.size(); i++) {
-		if (frame[i].empty()) {
+	for (unsigned i = 0; i < images.size(); i++){
+		//Upload images to GPU
+		cv::Mat image = images[i];
+		if (image.empty()) {
 			cerr << "ERROR: Could not load Input image!! \n";
 			return;
 		}
 		cv::cuda::GpuMat gpu_frame;
-		gpu_frame.upload(frame[i]);
-		
+		gpu_frame.upload(image);
 		//Resize
 		cv::cuda::GpuMat resized;
-		cv::cuda::resize(gpu_frame, resized, input_size, 0, 0, cv::INTER_NEAREST);
+		cv::cuda::resize(gpu_frame, resized, input_size, 0, 0, cv::INTER_AREA);
 		//Normalize
 		cv::cuda::GpuMat flt_image;
 		resized.convertTo(flt_image, CV_32FC3, 1.f / 255.f);
@@ -91,29 +97,35 @@ void TRTParser::preprocessImage(vector<cv::Mat> frame, float* gpu_input, const n
 		cv::cuda::divide(flt_image, cv::Scalar(0.229f, 0.224f, 0.225f), flt_image, 1, -1);
 		//Allocate
 		if (channels == 3){
-			vector< cv::cuda::GpuMat > chw;
-			for (unsigned j = 0; j < channels; j++){
-				chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i * channels + j) * input_width * input_height));
+			if (channel_first){
+				vector< cv::cuda::GpuMat > chw;
+				for (unsigned j = 0; j < channels; j++){
+					chw.emplace_back(cv::cuda::GpuMat(input_size, CV_32FC1, gpu_input + (i*channels+j)*input_width*input_height));
+				}
+				cv::cuda::split(flt_image, chw);
 			}
-			cv::cuda::split(flt_image, chw);
+			else{
+				cout << "Does not support channels last yet!";
+				exit(-1);
+			}
 		}
 		else if (channels == 1){
 			cudaMemcpyAsync(gpu_input, flt_image.ptr<float>(), flt_image.rows*flt_image.step, cudaMemcpyDeviceToDevice);
 		}
-
 	}
 }
-vector<float> TRTParser::postprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size,const bool softMax) {
+
+vector<float> TRTParser::postprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size, const bool softMax) {
 	vector< float > cpu_output(output_size * batch_size);
 	cudaMemcpy(cpu_output.data(), gpu_output, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
 	if (softMax){
-		std::transform(cpu_output.begin(), cpu_output.end(), cpu_output.begin(), [](float val) {return std::exp(val);});
+		transform(cpu_output.begin(), cpu_output.end(), cpu_output.begin(), [](float val) {return exp(val);});
     	for (unsigned i = 0; i < batch_size; i++){
 			float sum = 0;
-			for (int j = 0; j < output_size; j++){
+			for (unsigned j = 0; j < output_size; j++){
 				sum += cpu_output.at(i*output_size + j);
 			}
-			for (int k = 0; k < output_size; k++){
+			for (unsigned k = 0; k < output_size; k++){
 				cpu_output.at(i*output_size + k) /=  sum;
 			}
 		}
@@ -122,7 +134,7 @@ vector<float> TRTParser::postprocessResult(float *gpu_output, const unsigned bat
 	return cpu_output;
 }
 
-bool TRTParser::inference(vector<cv::Mat> images, bool softMax) {
+bool TRTParser::inference(vector<cv::Mat> images, const bool softMax) {
 	if (images.size() > this->engine->getMaxBatchSize()){
 		cerr << "Batch size must be smaller or equal " << this->engine->getMaxBatchSize() << endl;
 		return false;
@@ -188,101 +200,4 @@ bool TRTParser::inference(vector<cv::Mat> images, bool softMax) {
 		cudaFree(buf);
 	}
 	return true;
-}
-
-nvinfer1::ICudaEngine* loadOnnxEngine(const string onnxPath, const unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
-	nvinfer1::IBuilder*builder{ nvinfer1::createInferBuilder(gLogger) };
-	const auto explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-	nvinfer1::INetworkDefinition* network{ builder->createNetworkV2(explicitBatch) };
-
-	TRTUniquePtr<nvonnxparser::IParser> parser{ nvonnxparser::createParser(*network, gLogger) };
-	TRTUniquePtr<nvinfer1::IBuilderConfig> config{ builder->createBuilderConfig() };
-	if (!parser->parseFromFile(onnxPath.c_str(), static_cast<int>(nvinfer1::ILogger::Severity::kINFO))){
-		cerr << "ERROR: Could not parse the engine from " << onnxPath << endl;
-		return nullptr;
-	}
-	config->setMaxWorkspaceSize(MAX_WORKSPACE_SIZE);
-	
-	if (fp16){
-		if (builder->platformHasFastFp16()){
-			cout << "Exporting model in FP16 Fast Mode\n";
-			config->setFlag(nvinfer1::BuilderFlag::kFP16);
-		}
-		else{
-			cout << "This system does not support FP16 fast mode\nExporting model in FP32 Mode\n";
-		}
-	}
-	else{
-		cout << "Exporting model in FP32 Mode\n";
-	}
-	builder->setMaxBatchSize(max_batchsize);
-
-	if (dynamic_shape){
-		if (input_tensor_name == ""){
-			cerr << "ERROR: Input tensor name is empty \n";
-			return nullptr;
-		}
-		if (dimension.size() != 3){
-			cerr << "ERROR: Dimension of dynamic shape must be 3 \n";
-			return nullptr;
-		}
-		auto profile = builder->createOptimizationProfile();
-		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, dimension.at(0), dimension.at(1), dimension.at(2)});
-		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{max(int(max_batchsize/2),1), dimension.at(0), dimension.at(1), dimension.at(2)});
-		profile->setDimensions(input_tensor_name.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{max_batchsize, dimension.at(0), dimension.at(1), dimension.at(2)});
-		config->addOptimizationProfile(profile);
-	}
-
-	return builder->buildEngineWithConfig(*network, *config);
-}
-
-
-bool convertOnnx2Trt(const string onnxEnginePath, const unsigned max_batchsize, bool fp16, string input_tensor_name, vector<unsigned> dimension, bool dynamic_shape) {
-	if (!checkFileIfExist(onnxEnginePath)) {
-		cout << "ERROR: " << onnxEnginePath << " not found! \n";
-		return false;
-	}
-	else {
-		cout << onnxEnginePath << " found!, Converting to TensorRT Engine \n";
-	}
-	size_t lastindex = onnxEnginePath.find_last_of(".");
-	string TRTFilename = onnxEnginePath.substr(0, lastindex) + ".trt";
-	if (checkFileIfExist(TRTFilename)) {
-		cout << TRTFilename << " is already exist! \n";
-		return true;
-	}
-
-	char buf[BUFSIZ];
-	size_t size;
-	FILE* source = fopen(onnxEnginePath.c_str(), "rb");
-	FILE* dest = fopen(TRTFilename.c_str(), "wb");
-
-	while (size = fread(buf, 1, BUFSIZ, source)) {
-		fwrite(buf, 1, size, dest);
-	}
-
-	fclose(source);
-	fclose(dest);
-
-	std::ofstream engineFile(TRTFilename, std::ios::binary);
-	if (!engineFile){
-		cerr << "ERROR: Could not open engine file: " << TRTFilename << endl;
-		remove(TRTFilename.c_str());
-		return false;
-	}
-	nvinfer1::ICudaEngine* engine = loadOnnxEngine(onnxEnginePath, max_batchsize, fp16, input_tensor_name, dimension, dynamic_shape);
-	if (engine == nullptr) {
-		cerr << "ERROR: Could not get onnx engine" << endl;
-		remove(TRTFilename.c_str());
-		return false;
-	}
-	TRTUniquePtr<nvinfer1::IHostMemory> serializedEngine{ engine->serialize() };
-	if (serializedEngine == nullptr)	{
-		remove(TRTFilename.c_str());
-		cerr << "ERROR: Could not serialized engine \n";
-		return false;
-	}
-	engineFile.write(static_cast<char*>(serializedEngine->data()), serializedEngine->size());
-	engine->destroy();
-	return !engineFile.fail();
 }

@@ -3,56 +3,15 @@
 #define TRT_PARSER_H
 
 #include <iostream>
-#include <string.h>
-#include <fstream>
-#include <ostream>
-#include <vector>
-#include <algorithm>
-#include <typeinfo>
-#include <memory>
-#include <stdio.h>
 
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/cudaarithm.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
-#include <NvInferRuntime.h>
-#include <NvInfer.h>
-#include <NvOnnxParser.h>
-#include <cuda_runtime_api.h>
-
-#include "utils.hpp"
-
+#include "utils.h"
 using namespace std;
-
-#define MAX_WORKSPACE_SIZE (1 << 30)
-
-struct TRTDestroy{
-	template< class T >
-	void operator()(T* obj) const{
-		if (obj){
-			obj->destroy();
-		}
-	}
-};
-
-template< class T >
-using TRTUniquePtr = std::unique_ptr< T, TRTDestroy >;
-
-static class Logger : public nvinfer1::ILogger{
-public:
-	void log(Severity severity, const char* msg) override{
-		if ((severity == Severity::kERROR) || (severity == Severity::kINTERNAL_ERROR)) {
-			cout << msg << endl;
-		}
-	}
-
-	nvinfer1::ILogger& getTRTLogger(){
-		return *this;
-	}
-} gLogger;
-
 
 class TRTParser {
 private:
@@ -67,10 +26,7 @@ public:
 	TRTParser();
 	bool init(const string enginePath);
 	~TRTParser();
-	bool inference(vector<cv::Mat> image, bool softMax=false);
+	bool inference(vector<cv::Mat> image, const bool softMax);
 };
-
-nvinfer1::ICudaEngine* loadOnnxEngine(const string onnxPath, const unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
-bool convertOnnx2Trt(const string onnxEnginePath, const unsigned max_batchsize, bool fp16, string input_tensor_name="", vector<unsigned> dimension={}, bool dynamic_shape=false);
 
 #endif //TRT_PARSER_H

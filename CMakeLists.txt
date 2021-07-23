@@ -20,8 +20,11 @@ find_package(OpenCV REQUIRED)
 link_libraries(stdc++fs)
 
 add_executable(main main.cpp
+			utils.h
+			utils.cpp
 			TRTParser.h
-			TRTParser.cpp)
+			TRTParser.cpp
+			)
 
 target_link_libraries( main ${OpenCV_LIBS})
 target_link_libraries( main cudart)

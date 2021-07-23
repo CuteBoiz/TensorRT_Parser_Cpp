@@ -1,7 +1,9 @@
 #include <iostream>
 #include <chrono>
+#include "utils.h"
 #include "TRTParser.h"
 
+using namespace std;
 
 static bool check(unsigned maxBatchSize, string enginePath);
 static bool convert(int argc, char** argv);
@@ -134,25 +136,24 @@ bool infer(int argc, char **argv){
 		folderPath = folderPath + '/';
 	}
 	cv::Mat image;
-	std::vector<std::string> fileNames;
-	std::vector<cv::Mat> images;
+	vector<string> fileNames;
+	vector<cv::Mat> images;
 	TRTParser engine;
 	unsigned nrof_iamges = 0;
 	unsigned i = 0;
 
-	if (readFilesInDir(folderPath.c_str(), fileNames) < 0) {
-        std::cout << "read_files_in_dir failed." << std::endl;
+	if (!readFilesInDir(folderPath.c_str(), fileNames)) {
+        cout << "Could not read files from"<< folderPath << endl;
         return false;
     }		
 	if (!engine.init(enginePath)){
 		cerr << "ERROR: Could not parse tensorRT engine! \n";
 		return false;
 	}
-	
 	for (unsigned f = 0; f < (unsigned)fileNames.size(); f += i) {
 		unsigned index = 0;
 		for (i = 0; index < batchSize && (f + i) < (unsigned)fileNames.size(); i++) {
-			std::string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
+			string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
 			if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
 				cout << fileNames[f + i] << endl;
 				cv::Mat image = cv::imread(folderPath + fileNames[f + i]);
