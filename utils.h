@@ -13,7 +13,7 @@
 #include <dirent.h>
 using namespace std;
 
-#define MAX_WORKSPACE_SIZE (1 << 20)
+#define MAX_WORKSPACE_SIZE (1e6 * 1500) //1500 Mb
 
 struct TRTDestroy{
     template< class T >
@@ -28,7 +28,7 @@ using TRTUniquePtr = unique_ptr< T, TRTDestroy >;
 
 static class Logger : public nvinfer1::ILogger{
 public:
-    void log(Severity severity, const char* msg) override{
+    void log(Severity severity, const char* msg) noexcept override{
         if ((severity == Severity::kERROR) || (severity == Severity::kINTERNAL_ERROR)) {
             cout << msg << endl;
         }
