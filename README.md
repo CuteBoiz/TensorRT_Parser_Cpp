@@ -7,8 +7,8 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
 
 ## I. Prerequiste.
 
-- [CUDA/CUDNN/TensorRT Installation Guide](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)
-- [Install OpenCV From Source with CUDA support](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)
+- [CUDA/CUDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)
+- [OpenCV From Source with CUDA support](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)
 
 ## II. Setup.
 
@@ -20,9 +20,9 @@ cd TensorRT_Parser_Cpp
 gedit CMakeList #Then change my TensorRT path to your TensorRT path(include and lib)
 ```
 
-#### 2. Add dirent.h to C++ library (Windows Only)
+#### 2. Add `dirent.h` to C++ library. *(For Visual Studio Only)*
 
- move dirent.h file from [Additional files](https://github.com/CuteBoiz/TensorRT_Parser_Cpp/tree/main/Addition%20files) to `Visual-Studio-Installed-Path\2017\Community\VC\Tools\MSVC\14.16.27023\include`
+ move dirent.h file from [Additional files](https://github.com/CuteBoiz/TensorRT_Parser_Cpp/tree/main/Addition%20files) to `Visual-Studio-Installed-Path\201x\Community\VC\Tools\MSVC\14.16.27023\include`
 
 #### 3. Build.
 
