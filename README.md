@@ -45,7 +45,7 @@ make
     ./main -e ../2020_0421_0925.onnx 1 fp16
     ```
 
-## IV. Export Onnx model to TensorRT model (.trt) with dynamic input shape.
+## IV. Export Onnx model to TensorRT model (.trt) with dynamic shape input.
   - Export:
     ```sh
     ./main -ed "model_path" "max_batch_size" "input tensor name" "dimension1" "dimension2" "dimension3" ("fp16")
@@ -73,7 +73,8 @@ make
 ## VI. TO-DO
 
 - [X] **Fix split image on GPU bug.** 
-- [ ] Check multiple inputs model.
+- [x] Check multiple inputs model.
 - [x] Check multiple outputs model.
 - [X] Simplify the main process. 
 - [x] Return result vectors. 
+- [ ] Channel last (3 channels).

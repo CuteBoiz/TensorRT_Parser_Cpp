@@ -1,3 +1,10 @@
+/*
+TensorRT Parser Class.
+
+author: phatnt.
+modified date: 2021-09-29
+
+ */
 #pragma once
 #ifndef TRT_PARSER_H
 #define TRT_PARSER_H
@@ -18,15 +25,31 @@ private:
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
 
-	nvinfer1::ICudaEngine* loadTRTEngine(const string enginePath);
-	size_t getSizeByDim(const nvinfer1::Dims& dims);
-	void preprocessImage(vector<cv::Mat> image, float* gpu_input, const nvinfer1::Dims& dims);
-	vector<float> postprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size, const bool softMax);
+	nvinfer1::ICudaEngine* LoadTRTEngine(const string enginePath);
+	size_t GetSizeByDim(const nvinfer1::Dims& dims);
+	void PreprocessImage(vector<cv::Mat> images, float* gpu_input, const nvinfer1::Dims& dims);
+	vector<float> PostprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size, const bool softMax);
 public:
 	TRTParser();
-	bool init(const string enginePath);
 	~TRTParser();
-	bool inference(vector<cv::Mat> image, const bool softMax);
+	bool Init(const string enginePath);
+	/*
+	Create tensorrt engine.
+	Args:
+		enginePath: path to tensorrt engine.
+	Return:
+		<bool> Success checking.
+	 */
+	
+	bool Inference(vector<cv::Mat> images, const bool softMax);
+	/*
+	TensorRT inference.
+	Args:
+		images: infer images array.
+		softMax: add softmax to last layer of model.
+	Return:
+		<bool> Success checking.
+	 */
 };
 
 #endif //TRT_PARSER_H
