@@ -22,12 +22,17 @@ using namespace std;
 
 class TRTParser {
 private:
+	unsigned imgH, imgW, imgC, maxBatchSize;
+	bool is_channel_first;
+	vector< nvinfer1::Dims > input_dims;
+	vector< nvinfer1::Dims > output_dims;
+	
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
 
 	nvinfer1::ICudaEngine* LoadTRTEngine(const string enginePath);
 	size_t GetSizeByDim(const nvinfer1::Dims& dims);
-	void PreprocessImage(vector<cv::Mat> images, float* gpu_input, const nvinfer1::Dims& dims);
+	void PreprocessImage(vector<cv::Mat> images, float* gpu_input);
 	vector<float> PostprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size, const bool softMax);
 public:
 	TRTParser();
