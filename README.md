@@ -33,30 +33,28 @@ make
 ```
 
 ## III. Export Onnx model to TensorRT model (.trt).
-  - Export:
-    ```sh
-    ./main export "--weight" ("--maxbatchsize") ("--fp16") ("--workspace") ("--tensor") ("--dims")
-    ```
-    - Arguments:
-      - `--weight` <string>:          path to onnx engine (required).
-      - `--fp16` <bool>:              use FP16 fast mode (x2 inference time) (default=false).
-      - `--maxbatchsize` <unsigned>:  inference max batchsize (default=1).
-      - `--workspace` <unsigned>:     max workspace size (default=1300 MB).
-      - `--tensor` <string>:          input tensor's name (use for dynamic shape input only).
-      - `--dims` <array(unsigned)>:   input tensor's dimension (use for dynamic shape input only) . 
+```sh
+./main export --weight (--maxbatchsize) (--fp16) (--workspace) (--tensor) (--dims)
+```
+- Arguments:
+    - `--weight` `string`: path to onnx engine `required`.
+    - `--fp16` `store_true`: use FP16 fast mode (x2 inference time) **default=false**.
+    - `--maxbatchsize` `unsigned`:  inference max batchsize **default=1**.
+    - `--workspace` `unsigned`: max workspace size **default=1300 MB**.
+    - `--tensor` `string`: input tensor's name ***(dynamic shape input only)***.
+    - `--dims` `array(unsigned)`: input tensor's dimension ***(dynamic shape input only)***. 
 
-    **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
+   **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
 
 ## IV. Inference:
-  - Inference:
-    ```sh
-    ./main infer "--weight" "--data" ("--batchsize") ("--softmax")
-    ```
-  - Arguments:
-      - `--weight` <string>:          path to tensorrt engine (required).
-      - `--data` <bool>:              path to inference images's folder (required).
-      - `--batchSize` <unsigned>:     inference batchsize (default=1).
-      - `--softmax` <bool>:           add softmax to last layer of engine (default=false).
+```sh
+./main infer --weight --data (--batchsize) (--softmax)
+```
+- Arguments:
+    - `--weight` `string`:          path to tensorrt engine `required`.
+    - `--data` `string`:              path to inference images's folder `required`.
+    - `--batchSize` `unsigned`:     inference batchsize **default=1**.
+    - `--softmax` `store_true`:           add softmax to last layer of engine **default=false**.
 
 ## VI. TO-DO
 
