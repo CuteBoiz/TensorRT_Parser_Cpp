@@ -35,46 +35,37 @@ make
 ## III. Export Onnx model to TensorRT model (.trt).
   - Export:
     ```sh
-    ./main -e "model_path" "max_batch_size" ("fp16")
+    ./main export "--weight" ("--maxbatchsize") ("--fp16") ("--workspace") ("--tensor") ("--dims")
     ```
+    - Arguments:
+      - `--weight` <string>:          path to onnx engine (required).
+      - `--fp16` <bool>:              use FP16 fast mode (x2 inference time) (default=false).
+      - `--maxbatchsize` <unsigned>:  inference max batchsize (default=1).
+      - `--workspace` <unsigned>:     max workspace size (default=1300 MB).
+      - `--tensor` <string>:          input tensor's name (use for dynamic shape input only).
+      - `--dims` <array(unsigned)>:   input tensor's dimension (use for dynamic shape input only) . 
+
     **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
 
-  - Example:
-    ```sh
-    ./main -e ../2020_0421_0925.onnx 10
-    ./main -e ../2020_0421_0925.onnx 1 fp16
-    ```
-
-## IV. Export Onnx model to TensorRT model (.trt) with dynamic shape input.
-  - Export:
-    ```sh
-    ./main -ed "model_path" "max_batch_size" "input tensor name" "dimension1" "dimension2" "dimension3" ("fp16")
-    ```
-    **Note:** To get input tensor name and shape of model: Use [Netron](https://github.com/lutzroeder/netron).
-
-  - Example:
-    ```sh
-    ./main -ed ../2020_0421_0925.onnx 10 input_1 128 128 3 
-    ./main -ed ../2020_0421_0925.onnx 1 input:0 3 640 640 fp16
-    ```
-
-## V. Inference:
+## IV. Inference:
   - Inference:
     ```sh
-    ./main -i "model_path" "images_folder_path" "batch_size" ("softmax")
+    ./main infer "--weight" "--data" ("--batchsize") ("--softmax")
     ```
+  - Arguments:
+      - `--weight` <string>:          path to tensorrt engine (required).
+      - `--data` <bool>:              path to inference images's folder (required).
+      - `--batchSize` <unsigned>:     inference batchsize (default=1).
+      - `--softmax` <bool>:           add softmax to last layer of engine (default=false).
 
-  - Example:
-    ```sh
-    ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 10
-    ./main -i ../2020_0421_0925.trt ../Dataset/Test/ 1 softmax
-    ```
-    
 ## VI. TO-DO
 
-- [X] **Fix split image on GPU bug.** 
-- [x] Check multiple inputs model.
-- [x] Check multiple outputs model.
-- [X] Simplify the main process. 
-- [x] Return result vectors. 
-- [ ] Channel last (3 channels).
+- [ ] Multiple inputs model.
+- [x] Multiple outputs model.
+- [ ] Add Channel last image allocate.
+- [ ] Change Primary GPU. 
+- [ ] Multi-type cast for arguments (Easy to maintain).
+- [ ] Non-image input model.
+- [ ] Add examples.
+- [ ] 2D,3D tensor sofmax execute.
+- [ ] Remove "Segmentation fault (core dumped)" at ending of inference. 

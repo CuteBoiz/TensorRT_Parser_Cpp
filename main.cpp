@@ -2,60 +2,59 @@
 Convert Onnx engine to TensorRT Engine And Infer.
 
 Author: phatnt
-Date modified: 2021-09-29
-
+Date modified: 2021-10-06
  */
 
 #include <iostream>
 #include <chrono>
 #include "utils.h"
 #include "TRTParser.h"
-
 using namespace std;
 
-static bool Check(unsigned maxBatchSize, string enginePath);
-static bool Convert(int argc, char** argv);
-static bool ConvertWithDynamicShapeInput(int argc, char **argv);
+#define DEFAULT_MAX_WORKSPACE_SIZE (1e6 * 1300)
+#define DEFAULT_MAX_BATCHSIZE 1
+#define DEFAULT_USE_FP16 false
+
+#define DEFAULT_INFER_BATCHSIZE 1
+#define DEFAULT_USE_SOFTMAX false
+
+static bool GetExportConfig(int argc, char ** argv, ExportConfig& config);
 static bool TRT_Inference(int argc, char **argv);
 
-int main(int argc,char** argv){
+int main(int argc,char** argv) {
 	/*
-	arguments:
-	[mode] 	Export onnx => trt
-			-e [model path] [max batchsize] ([fp16])
-
-			Export onnx => trt (with dynamic shape (1 input only))
-			-ed [model path] [max batchsize] [input tensor name] [dimension 1] [dimension 2] [dimension 3] ([fp16])
+	Args:
+	[mode]
+			export: Export onnx => TensorRT engine.		
 			
-			Infer TensorRT engine.
-			-i [model path] [images folder path] [inference batchsize]
-
+			infer: Infer TensorRT engine.
 	*/
 	
-	if ((argc >= 4 && argc <= 5) && string(argv[1]) == "-e"){
-		if(Convert(argc, argv)){
-			return 0; 
+	if (string(argv[1]) == "export") {
+		ExportConfig config;
+		if (!GetExportConfig(argc, argv, config)) {
+			cerr << "[ERROR] Get Arguments error!\n";
+			return -1;
 		}
-		return -1;
+		if (!ExportOnnx2Trt(config)){
+			cerr << "[ERROR] Export Failed! \n";
+			return -1;
+		}
+		cout << "[INFO] Export Successed! \n";
+		return 0;
 	}
-	else if ((argc >= 8 && argc <= 9) && string(argv[1]) == "-ed"){
-		if (ConvertWithDynamicShapeInput(argc, argv)){
+
+	else if (string(argv[1]) == "infer") {
+		if (TRT_Inference(argc, argv)) {
+			cout << "[INFO] Inference Successed! Done!\n";
 			return 0;
 		}
 		return -1;
-		
-	} 
-	else if ((argc >= 5 && argc <= 6)&& string(argv[1]) == "-i"){
-		if (TRT_Inference(argc, argv)){
-			return 0;
-		}
-		return -1;
 	}
-	else{
-		cout << "[ERROR]: Undefined arguments. \n";
-		cout <<	"[-e] [OnnxEnginePath] [max batchsize] ([fp16]) to export onnx => trt model \n\n";
-		cout << "[-ed][OnnxEnginePath] [max batchsize] [input tensor name] [d1] [d2] [d3] ([fp16])\n to export dynamic shape trt model(with 1 Input ONLY) \n\n";
-		cout << "[-i] [trtEnginePath] [imagesFolderPath] [batchSize] to infer trt model \n";
+	else {
+		cout << "[ERROR] Undefined mode: '" << string(argv[1]) << "'. \n";
+		cout <<	"[export]: to export Onnx Engine => TensorRT Engine. \n\n";
+		cout << "[infer]: TensorRT engine inference. \n";
 		return -1;
 	}
 	
@@ -63,157 +62,252 @@ int main(int argc,char** argv){
 }
 
 
-bool Check(unsigned maxBatchSize, string enginePath){
+bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 	/*
-	Check condition of maxBatchSize and existance of enginePath.
-	Input:
-		- maxBatchSize 	<unsigned int> max inference's batchsize.
-		- enginePath: 	<string> path to engine.
+	Get config from arguments use for tensorrt export.
+	Args:
+		--weight <string>: 			path to onnx engine.
+		--fp16 <bool>:				use FP16 fast mode (x2 inference time).
+		--maxbatchsize <unsigned>:	inference max batchsize.
+		--workspace <unsigned>:		max workspace size(MB)
+		--tensor <string>:			input tensor's name.
+		--dims <array(unsigned)>:	input tensor's dimension. 
+		config <ExportConfig>:  	rerturned config for export.
 	Return:
-		<bool> Condition checked result.
-
+		<bool> Success checking.
 	 */
-	if (maxBatchSize <= 0){
-		cerr <<"[ERROR]: max batchsize must be more than 0! \n";
-		return false;
-	}
-	if (!CheckFileIfExist(enginePath)){
-		cerr <<"[ERROR]: "<< enginePath << " not found! \n";
-		return false;
-	}
-	return true;
-}
-
-
-bool Convert(int argc, char** argv){
-	/*
-	Convert onnx engine to tensorrt engine.
-	Input:
-		argv[2]: enginePath 	<string>: path to onnx engine.
-		argv[3]: maxBatchSize 	<unsigned int>: max inference's batchsize.
-		(agrv[4]): fp16 		<bool>: export to FP16 fast mode engine.
-	Return:
-		<bool>: Success check. 
-	 */
-	string enginePath = string(argv[2]);
-	unsigned maxBatchSize = stoi(argv[3]);
-	bool fp16 = (argc == 5 && string(argv[4]) == "fp16") ? true : false;
-	if (!Check(maxBatchSize, enginePath)) return false;
+	vector<string> required_args = {"--weight"};
+	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--dims"};
 	
-	if (enginePath.substr(enginePath.find_last_of(".") + 1) == "onnx"){
-		if (ExportOnnx2Trt(enginePath, maxBatchSize, fp16)){
-			cout << "[INFO]: Export to TensorRT Success! \n"; 
-			return true;
+	vector<string> arguments = {};
+	unsigned argsIndex = 1;
+	string enginePath = "";
+	bool useFP16 = DEFAULT_USE_FP16;
+	size_t workspaceSize = DEFAULT_MAX_WORKSPACE_SIZE;
+	unsigned maxBatchSize = DEFAULT_MAX_BATCHSIZE;
+	bool useDynamicShape = false;
+	string inputTensorName = "";
+	vector<unsigned> tensorDims = {};
+	
+	//Get Arguments from argv and Check condition for required args.
+	for (unsigned i = 2; i < argc; i++) {
+		if (string(argv[i]).rfind("--") != -1) {
+			arguments.emplace_back(string(argv[i]));
 		}
-		else{
-			cerr << "[ERROR]: Export Failed! \n"; 
+	}
+	if (!CheckRequiredArguments(required_args, arguments)) return false;
+	
+	//Get value from arguments and value validable checking.
+	for (unsigned i = 0; i < arguments.size(); i++) {
+		if (arguments.at(i) == "--weight") {
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--weight]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "file")){
+				cerr << "[ERROR] Invalid value for [--weight]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			enginePath = string(argv[argsIndex]);
+		}
+		else if (arguments.at(i) == "--fp16") {
+			argsIndex += 1;
+			useFP16 = true;
+		}
+		else if (arguments.at(i) == "--maxbatchsize") {
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--maxbatchsize]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
+				cerr << "[ERROR] Invalid value for [--maxbatchsize]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			maxBatchSize = stoi(argv[argsIndex]);
+			
+		}
+		else if (arguments.at(i) == "--workspace") {
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--workspace]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
+				cerr << "[ERROR] Invalid value for [--workspace]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			workspaceSize = stoi(argv[argsIndex]) * 1e6;
+		}
+		else if (arguments.at(i) == "--tensor") {
+			useDynamicShape = true;
+			argsIndex += 2;
+			inputTensorName = string(argv[argsIndex]);
+		}
+		else if (arguments.at(i) == "--dims") {
+			useDynamicShape = true;
+			if (argsIndex+3 >= argc) {
+				cerr << "[ERROR] Not enough values for [--dims]! \n";
+				return false;
+			}
+			try {
+				tensorDims.emplace_back(stoi(argv[argsIndex+2]));
+				tensorDims.emplace_back(stoi(argv[argsIndex+3]));
+				tensorDims.emplace_back(stoi(argv[argsIndex+4]));
+			}
+			catch (exception &err) {
+				cerr << "[ERROR] Invalid value for '--dims': " << argv[argsIndex+2] << " " << argv[argsIndex+3] << " " << argv[argsIndex+4] << ". Value must be unsigned interger array!\n";
+				return false;
+			}
+			argsIndex += 4;
+		}
+		else {
+			cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
 			return false;
 		}
+		if (argsIndex < argc-1) {
+			if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
+		}
+	}
+	//Update config.
+	if (!useDynamicShape) {
+		return config.Update(enginePath, maxBatchSize, workspaceSize, useFP16);
+	}
+	else {
+		return config.Update(enginePath, maxBatchSize, workspaceSize, useFP16, inputTensorName, tensorDims);
 	}
 }
 
-bool ConvertWithDynamicShapeInput(int argc, char **argv){
-	/*
-	Convert onnx engine to tensorrt engine with dynamic shape input.
-	Input:
-		argv[2]: enginePath 		<string>: path to onnx engine.
-		argv[3]: maxBatchSize 		<unsigned int>: max inference's batchsize.
-		argv[4]: input_tensor_name 	<string>: network input tensor's name.
-		argv[5-6-7]: dimension		<array(int)> dimension of input tensor.
-		(agrv[8]): fp16 			<bool>: export to FP16 fast mode engine.
-	Return:
-		<bool>: Success check. 
-	 */
-	string enginePath = string(argv[2]);
-	unsigned maxBatchSize = stoi(argv[3]);
-	string input_tensor_name = string(argv[4]);
-	bool fp16 = (argc == 9 && (string(argv[8]) == "fp16")) ? true : false;
-	if (!Check(maxBatchSize, enginePath)) return false;
 
-	vector<unsigned> dimension;
-	for (unsigned i = 5; i < 8; i++){
-		if (stoi(argv[i]) > 0){
-			dimension.emplace_back(stoi(argv[i]));
-		}
-		else{
-			cerr << "[ERROR]: Dimension must be more than 0 \n";
-			return false;
-		}
-	}
-	
-	if (ExportOnnx2Trt(enginePath, maxBatchSize, fp16, input_tensor_name, dimension, true)){
-		cout << "[INFO]: Export to TensorRT Success! \n";
-		dimension.clear();
-		return true;
-	}
-	else{
-		cerr << "[ERROR]: Export Failed! \n";
-		dimension.clear();
-		return false;
-	}
-}
-
-bool TRT_Inference(int argc, char **argv){
+bool TRT_Inference(int argc, char **argv) {
 	/*
 	TensorRT Engine Inference.
-	Input:
-		argv[2]: enginePath <string>: path to tensorrt engine.
-		argv[3]: folderPath <string>: path to inference images's folder.
-		argv[4]: batchSize 	<int>: infernce batchsize (must smaller than max batchsize of trt engine)
-		argv[5]: softmax 	<bool>: add softmax to last layer of engine.
+	Args:
+		--weight <string>		: path to tensorrt engine.
+		--data <string>			: path to inference images's folder.
+		--batchSize <unsigned>	: infernce batchsize (must smaller than max batchsize of trt engine)
+		--softmax <bool>		: add softmax to last layer of engine.
 	Return:
 		<bool>: Success checking.
 	 */
-	string enginePath = string(argv[2]);
-	string folderPath = string(argv[3]);
-	unsigned batchSize = stoi(argv[4]);
-	bool softmax = (argc == 6 && (string(argv[5]) == "softmax")) ? true : false;
-	if (!Check(batchSize, enginePath)) return -1;
+	vector<string> required_args = {"--weight", "--data"};
+	vector<string> non_req_args = {"--batchsize", "--softmax"};
+
+	unsigned argsIndex = 1;
+	vector<string> arguments = {};
+	string enginePath = "";
+	string dataPath = "";
+	unsigned batchsize = DEFAULT_INFER_BATCHSIZE;
+	bool useSofmax = DEFAULT_USE_SOFTMAX;
+
+	for (unsigned i = 2; i < argc; i++){
+		if (string(argv[i]).rfind("--") != -1){
+			arguments.emplace_back(string(argv[i]));
+		}
+	}
+	if (!CheckRequiredArguments(required_args, arguments)) return false;
+
+	for (unsigned i = 0; i < arguments.size(); i++) {
+		if (arguments.at(i) == "--weight"){
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--weight]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "file")){
+				cerr << "[ERROR] Invalid value for [--weight]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			enginePath = string(argv[argsIndex]);
+		}
+		else if (arguments.at(i) == "--data"){
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--data]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "folder")){
+				cerr << "[ERROR] Invalid value for [--data]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			dataPath = string(argv[argsIndex]);
+		}
+		else if (arguments.at(i) == "--batchsize") {
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--batchsize]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
+				cerr << "[ERROR] Invalid value for [--batchsize]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			batchsize = stoi(argv[argsIndex]);
+		}
+		else if (arguments.at(i) == "--softmax"){
+			argsIndex += 1;
+			useSofmax = true;
+		}
+		else{
+			cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
+			return false;
+		}
+		if (argsIndex < argc-1){
+			if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
+		}
+	}
+
 	
-	if (folderPath[folderPath.length() - 1] != '/' && folderPath[folderPath.length() -1] != '\\') {
-		folderPath = folderPath + '/';
+	if (dataPath[dataPath.length() - 1] != '/' && dataPath[dataPath.length() -1] != '\\') {
+		dataPath = dataPath + '/';
 	}
 	cv::Mat image;
 	vector<string> fileNames;
 	vector<cv::Mat> images;
 	TRTParser engine;
 	unsigned nrofInferIamges = 0;
-	unsigned i = 0;
-
-	//Get images form folder
-	if (!ReadFilesInDir(folderPath.c_str(), fileNames)) {
-        cout << "[ERROR]: Could not read files from"<< folderPath << endl;
-        return false;
-    }
+	
  	//Initialize engine
-	if (!engine.Init(enginePath)){
-		cerr << "[ERROR]: Could not parse tensorRT engine! \n";
+	if (engine.Init(enginePath)){
+		cout << "[INFO] Load '" << enginePath << "' success!. Inferencing... \n";
+	}
+	else{
+		cerr << "[ERROR] Could not parse tensorRT engine! \n";
 		return false;
 	}
-	for (unsigned f = 0; f < (unsigned)fileNames.size(); f += i) {
+	//Get images form folder
+	if (ReadFilesInDir(dataPath.c_str(), fileNames)) {
+        cout << "[INFO] Load data from '" << dataPath << "' success! Total " << fileNames.size() << " files. \n";
+    }
+    else{
+    	cout << "[ERROR] Could not read files from"<< dataPath << endl;
+        return false;
+    }
+    unsigned i = 0;
+	for (unsigned f = 0; f < fileNames.size(); f += i) {
 		//Prepare inference batch
-		unsigned index = 0;
-		for (i = 0; index < batchSize && (f + i) < (unsigned)fileNames.size(); i++) {
+		unsigned batchIndex = 0;
+		for (i = 0; batchIndex < batchsize && (f + i) < fileNames.size(); i++) {
 			string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
 			if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
 				cout << fileNames[f + i] << endl;
-				cv::Mat image = cv::imread(folderPath + fileNames[f + i]);
+				cv::Mat image = cv::imread(dataPath + fileNames[f + i]);
 				images.emplace_back(image);
-				index++;
+				batchIndex++;
 				nrofInferIamges++;
 			}
 			else{
-				cout << fileNames[f + i] << " is not an image! \n";
+				cout << "[WARNING] '" << fileNames[f + i] << "' not an image! \n";
 			}
 		}
 		if (images.size() == 0) {
-			continue; //Skip if got a of non-image files stack.
+			continue; //Skip if got a non-image files stack.
 		}
-
 		//Inference
 		auto start = chrono::system_clock::now();
-		if (!engine.Inference(images, softmax)){
-			cerr << "[ERROR]: Inference error! \n";
+		if (!engine.Inference(images, useSofmax)){
+			cerr << "[ERROR] Inference error! \n";
 			return false;
 		}
 		auto end = chrono::system_clock::now();
@@ -225,7 +319,6 @@ bool TRT_Inference(int argc, char **argv){
 		}
 		images.clear();
 	}
-	cout << "[INFO]: Total inferenced images: " << nrofInferIamges << endl;
-	fileNames.clear();
+	cout << "[INFO] Total inferenced images: " << nrofInferIamges << endl;
 	return true;
 }

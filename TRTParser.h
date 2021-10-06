@@ -18,14 +18,15 @@ modified date: 2021-09-29
 #include <opencv2/highgui/highgui.hpp>
 
 #include "utils.h"
+
 using namespace std;
 
 class TRTParser {
 private:
 	unsigned imgH, imgW, imgC, maxBatchSize;
-	bool is_channel_first;
-	vector< nvinfer1::Dims > input_dims;
-	vector< nvinfer1::Dims > output_dims;
+	bool isCHW;
+	vector< nvinfer1::Dims > inputDims;
+	vector< nvinfer1::Dims > outputDims;
 	
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
