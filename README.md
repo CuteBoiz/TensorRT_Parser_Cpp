@@ -34,35 +34,37 @@ make
 
 ## III. Export Onnx model to TensorRT model (.trt).
 ```sh
-./main export --weight (--maxbatchsize) (--fp16) (--workspace) (--tensor) (--dims)
+./main export --weight (--maxbatchsize) (--fp16) (--workspace) (--tensor) (--dims) (--gpu)
 ```
 - Arguments:
     - `--weight` `string`: path to onnx engine `required`.
     - `--fp16` `store_true`: use FP16 fast mode (x2 inference time) **default=false**.
-    - `--maxbatchsize` `unsigned`:  inference max batchsize **default=1**.
-    - `--workspace` `unsigned`: max workspace size **default=1300 MB**.
+    - `--maxbatchsize` `int`:  inference max batchsize **default=1**.
+    - `--workspace` `int`: max workspace size **default=1300 MB**.
     - `--tensor` `string`: input tensor's name ***(dynamic shape input only)***.
-    - `--dims` `array(unsigned)`: input tensor's dimension ***(dynamic shape input only)***. 
+    - `--dims` `array(int)`: input tensor's dimension ***(dynamic shape input only)***. 
+    - `--gpu` `int` : gpu number **(default=0)**.
 
    **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
 
 ## IV. Inference:
 ```sh
-./main infer --weight --data (--batchsize) (--softmax)
+./main infer --weight --data (--batchsize) (--softmax) (--gpu)
 ```
 - Arguments:
-    - `--weight` `string`:          path to tensorrt engine `required`.
-    - `--data` `string`:              path to inference images's folder `required`.
-    - `--batchSize` `unsigned`:     inference batchsize **default=1**.
-    - `--softmax` `store_true`:           add softmax to last layer of engine **default=false**.
+    - `--weight` `string`: path to tensorrt engine `required`.
+    - `--data` `string`: path to inference images's folder `required`.
+    - `--batchSize` `int`: inference batchsize **default=1**.
+    - `--softmax` `store_true`: add softmax to last layer of engine **default=false**.
+    - `--gpu` `int`: gpu number **(default=0)**.
 
 ## VI. TO-DO
 
 - [ ] Multiple inputs model.
 - [x] Multiple outputs model.
 - [ ] Add Channel last image allocate.
-- [ ] Change Primary GPU. 
-- [ ] Multi-type cast for arguments (Easy to maintain).
+- [x] Change Primary GPU. 
+- [x] Multi-type cast for arguments (Easy to maintain).
 - [ ] Non-image input model.
 - [ ] Add examples.
 - [ ] 2D,3D tensor sofmax execute.

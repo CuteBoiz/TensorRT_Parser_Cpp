@@ -2,7 +2,7 @@
 Convert Onnx engine to TensorRT Engine And Infer.
 
 Author: phatnt
-Date modified: 2021-10-06
+Date modified: 2021-10-07
  */
 
 #include <iostream>
@@ -80,7 +80,6 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--dims", "--gpu"};
 	
 	vector<string> arguments = {};
-	unsigned argsIndex = 1;
 	string enginePath = "";
 	bool useFP16 = DEFAULT_USE_FP16;
 	size_t workspaceSize = DEFAULT_MAX_WORKSPACE_SIZE;
@@ -98,121 +97,62 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 	if (!CheckRequiredArguments(required_args, arguments)) return false;
 	
 	//Get value from arguments and value validable checking.
-	for (unsigned i = 0; i < arguments.size(); i++) {
-		if (arguments.at(i) == "--weight") {
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--weight]! \n";
-				return false;
+	unsigned argsIndex = 1;
+	try {
+		for (unsigned i = 0; i < arguments.size(); i++) {
+			if (arguments.at(i) == "--weight") {
+				enginePath = GetArgumentsValue(argc, argv, argsIndex, "file");
 			}
-			if (!CheckValidValue(string(argv[argsIndex]), "file")){
-				cerr << "[ERROR] Invalid value for [--weight]: '" << argv[argsIndex] <<"'! \n";
-				return false;
+			else if (arguments.at(i) == "--fp16") {
+				GetArgumentsValue(argc, argv, argsIndex, "store_true");
+				useFP16 = true;
 			}
-			enginePath = string(argv[argsIndex]);
-		}
-		else if (arguments.at(i) == "--fp16") {
-			argsIndex += 1;
-			useFP16 = true;
-		}
-		else if (arguments.at(i) == "--maxbatchsize") {
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--maxbatchsize]! \n";
-				return false;
+			else if (arguments.at(i) == "--maxbatchsize") {
+				maxBatchSize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
 			}
-			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
-				cerr << "[ERROR] Invalid value for [--maxbatchsize]: '" << argv[argsIndex] <<"'! \n";
-				return false;
+			else if (arguments.at(i) == "--workspace") {
+				workspaceSize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int")) * 1048576;
 			}
-			maxBatchSize = stoi(argv[argsIndex]);
-			
-		}
-		else if (arguments.at(i) == "--workspace") {
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--workspace]! \n";
-				return false;
+			else if (arguments.at(i) == "--tensor") {
+				useDynamicShape = true;
+				inputTensorName = GetArgumentsValue(argc, argv, argsIndex, "string");
 			}
-			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
-				cerr << "[ERROR] Invalid value for [--workspace]: '" << argv[argsIndex] <<"'! \n";
-				return false;
+			else if (arguments.at(i) == "--dims") {
+				useDynamicShape = true;
+				if (argsIndex + 4 >= argc) {
+					cerr << "[ERROR] Not enough values for [--dims]! \n";
+					return false;
+				}
+				try {
+					tensorDims.emplace_back(stoi(argv[argsIndex+2]));
+					tensorDims.emplace_back(stoi(argv[argsIndex+3]));
+					tensorDims.emplace_back(stoi(argv[argsIndex+4]));
+				}
+				catch (exception &err) {
+					cerr << "[ERROR] Invalid value for '--dims': " << argv[argsIndex+2] << " " << argv[argsIndex+3] << " " << argv[argsIndex+4] << ". Value must be unsigned interger array!\n";
+					return false;
+				}
+				argsIndex += 4;
 			}
-			workspaceSize = stoi(argv[argsIndex]) * 1048576;
-		}
-		else if (arguments.at(i) == "--tensor") {
-			useDynamicShape = true;
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--tensor]! \n";
-				return false;
-			}
-			inputTensorName = string(argv[argsIndex]);
-		}
-		else if (arguments.at(i) == "--dims") {
-			useDynamicShape = true;
-			if (argsIndex + 4 >= argc) {
-				cerr << "[ERROR] Not enough values for [--dims]! \n";
-				return false;
-			}
-			try {
-				tensorDims.emplace_back(stoi(argv[argsIndex+2]));
-				tensorDims.emplace_back(stoi(argv[argsIndex+3]));
-				tensorDims.emplace_back(stoi(argv[argsIndex+4]));
-			}
-			catch (exception &err) {
-				cerr << "[ERROR] Invalid value for '--dims': " << argv[argsIndex+2] << " " << argv[argsIndex+3] << " " << argv[argsIndex+4] << ". Value must be unsigned interger array!\n";
-				return false;
-			}
-			argsIndex += 4;
-		}
-		else if (arguments.at(i) == "--gpu") {
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] Not enough values for [--gpu]! \n";
-				return false;
-			}
-			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
-				cerr << "[ERROR] Invalid value for [--gpu]: '" << argv[argsIndex] <<"'! \n";
-				return false;
-			}
-			unsigned gpuNum = stoi(argv[argsIndex]);
-			int deviceCount = 0;
-			cudaError_t err = cudaSuccess;
-			err = cudaGetDeviceCount(&deviceCount);
-			if (err != cudaSuccess) {
-				cerr << "[ERROR] " << cudaGetErrorString(err) << endl; 
-				return false;
+			else if (arguments.at(i) == "--gpu") {
+				unsigned gpuNum = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
+				if (!SetPrimaryCudaDevice(gpuNum)){
+					cout << "[ERROR] switch primary CUDA device failed!\n";
+					return false;
+				}
 			}
 			else {
-				cout << "[INFO] Device Count: " << deviceCount << endl;
-			}
-			if (gpuNum >= deviceCount){
-				cout << "[ERROR] Gpu num must smaller than '" << deviceCount <<"'. \n";
+				cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
 				return false;
 			}
-			err = cudaSetDevice(gpuNum);
-			if (err == cudaSuccess) {
-	  			cout << "[INFO] Switched to GPU:" << gpuNum << " success!\n";
-	  		}
-	  		else{
-	  			cout << "[ERROR] Set CUDA device failed!\n";
-	  			return false;
-	  		}
-		}
-		else {
-			cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
-			return false;
-		}
-		if (argsIndex < argc-1) {
-			if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
+			if (argsIndex < argc-1) {
+				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
+			}
 		}
 	}
-	size_t totalDevMem, freeDevMem;
-	cudaMemGetInfo(&freeDevMem, &totalDevMem);
-	if (workspaceSize > freeDevMem) {
-		cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << workspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nReduce workspacesize to continue.\n";
-		return false;
+	catch (exception& err) {
+		cerr << err.what();
+		return false; 
 	}
 	//Update config.
 	if (!useDynamicShape) {
@@ -252,90 +192,41 @@ bool TRT_Inference(int argc, char **argv) {
 	}
 	if (!CheckRequiredArguments(required_args, arguments)) return false;
 
-	for (unsigned i = 0; i < arguments.size(); i++) {
-		if (arguments.at(i) == "--weight"){
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--weight]! \n";
+	try{
+		for (unsigned i = 0; i < arguments.size(); i++) {
+			if (arguments.at(i) == "--weight"){
+				enginePath = GetArgumentsValue(argc, argv, argsIndex, "file");
+			}
+			else if (arguments.at(i) == "--data"){
+				dataPath = GetArgumentsValue(argc, argv, argsIndex, "folder");
+			}
+			else if (arguments.at(i) == "--batchsize") {
+				batchsize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
+			}
+			else if (arguments.at(i) == "--softmax"){
+				GetArgumentsValue(argc, argv, argsIndex, "store_true");
+				useSofmax = true;
+			}
+			else if (arguments.at(i) == "--gpu") {
+				unsigned gpuNum = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
+				if (!SetPrimaryCudaDevice(gpuNum)){
+					cout << "[ERROR] switch primary CUDA device failed!\n";
+					return false;
+				}
+			}
+			else{
+				cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
 				return false;
 			}
-			if (!CheckValidValue(string(argv[argsIndex]), "file")){
-				cerr << "[ERROR] Invalid value for [--weight]: '" << argv[argsIndex] <<"'! \n";
-				return false;
+			if (argsIndex < argc-1){
+				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
 			}
-			enginePath = string(argv[argsIndex]);
-		}
-		else if (arguments.at(i) == "--data"){
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--data]! \n";
-				return false;
-			}
-			if (!CheckValidValue(string(argv[argsIndex]), "folder")){
-				cerr << "[ERROR] Invalid value for [--data]: '" << argv[argsIndex] <<"'! \n";
-				return false;
-			}
-			dataPath = string(argv[argsIndex]);
-		}
-		else if (arguments.at(i) == "--batchsize") {
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] None value for [--batchsize]! \n";
-				return false;
-			}
-			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
-				cerr << "[ERROR] Invalid value for [--batchsize]: '" << argv[argsIndex] <<"'! \n";
-				return false;
-			}
-			batchsize = stoi(argv[argsIndex]);
-		}
-		else if (arguments.at(i) == "--softmax"){
-			argsIndex += 1;
-			useSofmax = true;
-		}
-		else if (arguments.at(i) == "--gpu") {
-			argsIndex += 2;
-			if (argsIndex >= argc) {
-				cerr << "[ERROR] Not enough values for [--gpu]! \n";
-				return false;
-			}
-			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
-				cerr << "[ERROR] Invalid value for [--gpu]: '" << argv[argsIndex] <<"'! \n";
-				return false;
-			}
-			unsigned gpuNum = stoi(argv[argsIndex]);
-			int deviceCount = 0;
-			cudaError_t err = cudaSuccess;
-			err = cudaGetDeviceCount(&deviceCount);
-			if (err != cudaSuccess) {
-				cerr << "[ERROR] " << cudaGetErrorString(err) << endl; 
-				return false;
-			}
-			else {
-				cout << "[INFO] Device Count: " << deviceCount << endl;
-			}
-			if (gpuNum >= deviceCount){
-				cout << "[ERROR] Gpu num must smaller than '" << deviceCount <<"'. \n";
-				return false;
-			}
-			err = cudaSetDevice(gpuNum);
-			if (err == cudaSuccess) {
-	  			cout << "[INFO] Switched to GPU:" << gpuNum << " success!\n";
-	  		}
-	  		else{
-	  			cout << "[ERROR] Set CUDA device failed!\n";
-	  			return false;
-	  		}
-		}
-		else{
-			cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
-			return false;
-		}
-		if (argsIndex < argc-1){
-			if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
 		}
 	}
-
+	catch (exception& err) {
+		cerr << err.what();
+		return false; 
+	}
 	
 	if (dataPath[dataPath.length() - 1] != '/' && dataPath[dataPath.length() -1] != '\\') {
 		dataPath = dataPath + '/';

@@ -28,6 +28,35 @@ bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names) {
     return true;
 }
 
+bool SetPrimaryCudaDevice(const unsigned gpuNum){
+    int deviceCount = 0;
+    cudaError_t err = cudaSuccess;
+
+    err = cudaGetDeviceCount(&deviceCount);
+    if (err != cudaSuccess) {
+        cerr << "[ERROR] " << cudaGetErrorString(err) << endl; 
+        return false;
+    }
+    else {
+        cout << "[INFO] Device Count: " << deviceCount << endl;
+    }
+    if (gpuNum >= deviceCount){
+        cout << "[ERROR] Gpu num must smaller than '" << deviceCount <<"'. \n";
+        return false;
+    }
+    err = cudaSetDevice(gpuNum);
+
+    if (err == cudaSuccess) {
+    	size_t totalDevMem, freeDevMem;
+		cudaMemGetInfo(&freeDevMem, &totalDevMem);
+        cout << "[INFO] Switched to GPU:" << gpuNum << " success! Free memory: " << freeDevMem/1048576 <<"MB. \n";
+        return true;
+    }
+    else{
+        return false;
+    }
+}
+
 bool CheckRequiredArguments(const vector<string> required_args, const vector<string> args){
 	vector<string> missed_args;
 	string str_args = "";
@@ -50,56 +79,6 @@ bool CheckRequiredArguments(const vector<string> required_args, const vector<str
 	return true;
 }
 
-bool CheckValidValue(string value, string type) {
-	if (type == "file") {
-		if (CheckFileIfExist(value.c_str())) {
-			return true;
-		}
-		else{
-			cerr << "[ERROR]: '" << value <<"' is not exist! \n";
-			return false;
-		}
-	}
-	else if (type == "folder") {
-		DIR *dir = opendir(value.c_str());
-		bool result;
-		if (dir){
-			result =  true;
-		}
-		else if (ENOENT == errno){
-			cerr << "[ERROR]: Folder '" << value <<"' is not exist! \n";
-			result = false;
-		}
-		else{
-			cerr << "[ERROR]: Could not open '" << value <<"'!\n";
-			result = false;
-		}
-		closedir(dir);
-		return result;
-	} 
-	else if (type == "unsigned") {
-		try  {
-			stoi(value);
-		}
-		catch (exception &err) {
-			return false;
-		}
-		return true;
-	} 
-	else if (type == "double") {
-		try  {
-			stod(value);
-		}
-		catch (exception &err) {
-			return false;
-		}
-		return true;
-	} 
-	else {
-		cerr << "[ERROR] Undefined value type '"<< type <<"'! \n";
-		return false;
-	}
-}
 
 bool CheckValidArgument(const vector<string> required_args, const vector<string> valid_args, const string args) {
 	vector<string> invalid_args;
@@ -117,6 +96,129 @@ bool CheckValidArgument(const vector<string> required_args, const vector<string>
 	return true;
 }
 
+string GetArgumentsValue(const int argc, char** argv, unsigned& argsIndex, const string type){
+    if (type == "store_true"){
+        argsIndex += 1;
+        return "";
+    }
+    else{
+        argsIndex += 2;
+    }
+    if (argsIndex >= argc) {
+        throw std::invalid_argument("[ERROR] None value for argument!\n");
+    }    
+    string value = string(argv[argsIndex]);
+    if (type == "string"){
+        //do nothing.
+    }
+    else if (type == "file") {
+        if (!CheckFileIfExist(value.c_str())) {
+            throw std::invalid_argument("[ERROR]: '" + value + "' does not exist! \n");
+        }
+    }
+    else if (type == "folder") {
+        DIR *dir = opendir(value.c_str());
+        bool temp;
+        if (dir) temp =  true;
+        else if (ENOENT == errno) temp = false;
+        else temp = false;
+        closedir(dir);
+        if (!temp){
+            throw std::invalid_argument("[ERROR]: Folder '" + value + "' does not exist or Could not open! \n");
+        }
+    } 
+    else if (type == "int") {
+        try  {
+           stoi(value);
+        }
+        catch (exception &err) {
+            throw std::invalid_argument("[ERROR]: Could not cast '" + value + "' to int!\n");
+        }
+    } 
+    else if (type == "float") {
+        try  {
+           stod(value);
+        }
+        catch (exception &err) {
+            throw std::invalid_argument("[ERROR]: Could not cast '" + value + "' to float!\n");
+        }
+    } 
+    else {
+        throw std::invalid_argument("[ERROR] Undefined value type '" + type + "'! \n");
+    }
+    return value;
+}
+
+
+ExportConfig::ExportConfig(){
+    onnxEnginePath = "";
+    maxBatchsize = 0;
+    maxWorkspaceSize = 0;
+    useFP16 = false;
+    useDynamicShape = false;
+    inputTensorName = "";
+    tensorDims = {};
+}
+
+bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16){
+    onnxEnginePath = enginePath;
+    maxBatchsize = i_maxbatchsize;
+    maxWorkspaceSize = workspaceSize;
+    useFP16 = fp16;
+    useDynamicShape = false;
+    inputTensorName = "";
+    tensorDims = {};
+    if (maxBatchsize <= 0){
+        cerr <<"[ERROR] Max batchsize must be more than 0! \n";
+        return false;
+    }
+    if (!CheckFileIfExist(onnxEnginePath)){
+        cerr <<"[ERROR] '"<< onnxEnginePath << "' not found! \n";
+        return false;
+    }
+    size_t totalDevMem, freeDevMem;
+    cudaMemGetInfo(&freeDevMem, &totalDevMem);
+    if (maxWorkspaceSize > freeDevMem) {
+        cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << maxWorkspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
+        return false;
+    }
+    return true;
+}
+
+bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16, const string tensorName, const vector<unsigned> dims){
+    onnxEnginePath = enginePath;
+    maxBatchsize = i_maxbatchsize;
+    maxWorkspaceSize = workspaceSize;
+    useFP16 = fp16;
+    useDynamicShape = true;
+    inputTensorName = tensorName;
+    for (unsigned i = 0; i < dims.size(); i++){
+        tensorDims.emplace_back(dims.at(i));
+    }
+    if (maxBatchsize <= 0){
+        cerr <<"[ERROR] Max batchsize must be more than 0! \n";
+        return false;
+    }
+    if (!CheckFileIfExist(onnxEnginePath)){
+        cerr <<"[ERROR] '"<< onnxEnginePath << "' not found! \n";
+        return false;
+    }
+    size_t totalDevMem, freeDevMem;
+    cudaMemGetInfo(&freeDevMem, &totalDevMem);
+    if (maxWorkspaceSize > freeDevMem) {
+        cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << maxWorkspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
+        return false;
+    }
+    if (inputTensorName == ""){
+        cerr << "[ERROR] Input tensor name is empty! \n";
+        return false;
+    }
+    if (tensorDims.size() != 3){
+        cerr << "[ERROR] Dimension of dynamic shape must be 3! \n";
+        return false;
+    }
+    return true;
+}
 
 nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
 	string onnxEnginePath = exportConfig.onnxEnginePath;
@@ -127,9 +229,8 @@ nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
     cout << "[INFO] Enigne info: \n";
     cout << "\t - Engine Path: " << onnxEnginePath << endl;
 	cout << "\t - Max inference batchsize: " << maxBatchsize << endl;
-	cout << "\t - Max workspace size: " << maxWorkspaceSize/1e6 << " MB" << endl;
+	cout << "\t - Max workspace size: " << maxWorkspaceSize/1048576 << " MB" << endl;
 	cout << "\t - Use Dynamic shape: " << (useDynamicShape ? "True":"False") << endl;
-
 	//Parse engine (Check onnx support operators if parse wasn't success)
 	nvinfer1::IBuilder* builder{ nvinfer1::createInferBuilder(gLogger) };
 	const auto flag = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
