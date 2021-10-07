@@ -25,6 +25,7 @@ class TRTParser {
 private:
 	unsigned imgH, imgW, imgC, maxBatchSize;
 	bool isCHW;
+	size_t engineSize;
 	vector< nvinfer1::Dims > inputDims;
 	vector< nvinfer1::Dims > outputDims;
 	

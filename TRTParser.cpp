@@ -4,6 +4,7 @@ TRTParser::TRTParser() {
 	this->imgH = 0;
 	this->imgW = 0;
 	this->imgC = 0;
+	this->engineSize = 0;
 	this->maxBatchSize = 0;
 	this->isCHW = false;
 	this->engine = nullptr;
@@ -63,10 +64,17 @@ bool TRTParser::Init(const string enginePath) {
 	else{
 		this->maxBatchSize = this->engine->getMaxBatchSize();
 		this->context = this->engine->createExecutionContext();
+		this->engineSize = this->engine->getDeviceMemorySize();
+		size_t totalDevMem, freeDevMem;
+		cudaMemGetInfo(&freeDevMem, &totalDevMem);
+		if (this->engineSize > freeDevMem) {
+			cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << this->engineSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nReduce workspacesize to continue.\n";
+			return false;
+		}
 
 		cout << "[INFO] TensorRT Engine Info: \n";
 		cout << "\t - Max batchSize: " << this->maxBatchSize << endl;
-		cout << "\t - Engine size: " << this->engine->getDeviceMemorySize()/(1e6) << " MB (GPU Mem)" << endl; 
+		cout << "\t - Engine size: " << this->engine->getDeviceMemorySize()/(1048576) << " MB (GPU Mem)" << endl; 
 		cout << "\t - Tensors: \n";
 		for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
 			string tensorName;
@@ -88,15 +96,15 @@ bool TRTParser::Init(const string enginePath) {
 					cerr << "[ERROR] Input shape not valid! (If you used an non-image input, remove this condition! \n";
 					return false;
 				}
-				cout << "\t\t + (Input) '" << this->engine->getBindingName(i) << "': batchSize ";
+				cout << "\t\t + (Input) '" << this->engine->getBindingName(i) << "': batchSize";
 				this->inputDims.emplace_back(dims);
 			}
 			else {
-				cout << "\t\t + (Output) '" << this->engine->getBindingName(i) << "': batchSize ";
+				cout << "\t\t + (Output) '" << this->engine->getBindingName(i) << "': batchSize";
 				this->outputDims.emplace_back(dims);
 			}
 			for (unsigned j = 1; j < dims.nbDims; j++) {
-				cout << dims.d[j] << " ";
+				cout << " x " << dims.d[j];
 			}
 			cout << endl;	
 		}

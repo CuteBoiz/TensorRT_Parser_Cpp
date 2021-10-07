@@ -11,7 +11,7 @@ Date modified: 2021-10-06
 #include "TRTParser.h"
 using namespace std;
 
-#define DEFAULT_MAX_WORKSPACE_SIZE (1e6 * 1300)
+#define DEFAULT_MAX_WORKSPACE_SIZE (1048576 * 1300)
 #define DEFAULT_MAX_BATCHSIZE 1
 #define DEFAULT_USE_FP16 false
 
@@ -77,7 +77,7 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 		<bool> Success checking.
 	 */
 	vector<string> required_args = {"--weight"};
-	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--dims"};
+	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--dims", "--gpu"};
 	
 	vector<string> arguments = {};
 	unsigned argsIndex = 1;
@@ -138,16 +138,20 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 				cerr << "[ERROR] Invalid value for [--workspace]: '" << argv[argsIndex] <<"'! \n";
 				return false;
 			}
-			workspaceSize = stoi(argv[argsIndex]) * 1e6;
+			workspaceSize = stoi(argv[argsIndex]) * 1048576;
 		}
 		else if (arguments.at(i) == "--tensor") {
 			useDynamicShape = true;
 			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] None value for [--tensor]! \n";
+				return false;
+			}
 			inputTensorName = string(argv[argsIndex]);
 		}
 		else if (arguments.at(i) == "--dims") {
 			useDynamicShape = true;
-			if (argsIndex+3 >= argc) {
+			if (argsIndex + 4 >= argc) {
 				cerr << "[ERROR] Not enough values for [--dims]! \n";
 				return false;
 			}
@@ -162,6 +166,40 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 			}
 			argsIndex += 4;
 		}
+		else if (arguments.at(i) == "--gpu") {
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] Not enough values for [--gpu]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
+				cerr << "[ERROR] Invalid value for [--gpu]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			unsigned gpuNum = stoi(argv[argsIndex]);
+			int deviceCount = 0;
+			cudaError_t err = cudaSuccess;
+			err = cudaGetDeviceCount(&deviceCount);
+			if (err != cudaSuccess) {
+				cerr << "[ERROR] " << cudaGetErrorString(err) << endl; 
+				return false;
+			}
+			else {
+				cout << "[INFO] Device Count: " << deviceCount << endl;
+			}
+			if (gpuNum >= deviceCount){
+				cout << "[ERROR] Gpu num must smaller than '" << deviceCount <<"'. \n";
+				return false;
+			}
+			err = cudaSetDevice(gpuNum);
+			if (err == cudaSuccess) {
+	  			cout << "[INFO] Switched to GPU:" << gpuNum << " success!\n";
+	  		}
+	  		else{
+	  			cout << "[ERROR] Set CUDA device failed!\n";
+	  			return false;
+	  		}
+		}
 		else {
 			cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
 			return false;
@@ -169,6 +207,12 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 		if (argsIndex < argc-1) {
 			if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
 		}
+	}
+	size_t totalDevMem, freeDevMem;
+	cudaMemGetInfo(&freeDevMem, &totalDevMem);
+	if (workspaceSize > freeDevMem) {
+		cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << workspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nReduce workspacesize to continue.\n";
+		return false;
 	}
 	//Update config.
 	if (!useDynamicShape) {
@@ -192,7 +236,7 @@ bool TRT_Inference(int argc, char **argv) {
 		<bool>: Success checking.
 	 */
 	vector<string> required_args = {"--weight", "--data"};
-	vector<string> non_req_args = {"--batchsize", "--softmax"};
+	vector<string> non_req_args = {"--batchsize", "--softmax", "--gpu"};
 
 	unsigned argsIndex = 1;
 	vector<string> arguments = {};
@@ -248,6 +292,40 @@ bool TRT_Inference(int argc, char **argv) {
 		else if (arguments.at(i) == "--softmax"){
 			argsIndex += 1;
 			useSofmax = true;
+		}
+		else if (arguments.at(i) == "--gpu") {
+			argsIndex += 2;
+			if (argsIndex >= argc) {
+				cerr << "[ERROR] Not enough values for [--gpu]! \n";
+				return false;
+			}
+			if (!CheckValidValue(string(argv[argsIndex]), "unsigned")){
+				cerr << "[ERROR] Invalid value for [--gpu]: '" << argv[argsIndex] <<"'! \n";
+				return false;
+			}
+			unsigned gpuNum = stoi(argv[argsIndex]);
+			int deviceCount = 0;
+			cudaError_t err = cudaSuccess;
+			err = cudaGetDeviceCount(&deviceCount);
+			if (err != cudaSuccess) {
+				cerr << "[ERROR] " << cudaGetErrorString(err) << endl; 
+				return false;
+			}
+			else {
+				cout << "[INFO] Device Count: " << deviceCount << endl;
+			}
+			if (gpuNum >= deviceCount){
+				cout << "[ERROR] Gpu num must smaller than '" << deviceCount <<"'. \n";
+				return false;
+			}
+			err = cudaSetDevice(gpuNum);
+			if (err == cudaSuccess) {
+	  			cout << "[INFO] Switched to GPU:" << gpuNum << " success!\n";
+	  		}
+	  		else{
+	  			cout << "[ERROR] Set CUDA device failed!\n";
+	  			return false;
+	  		}
 		}
 		else{
 			cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
