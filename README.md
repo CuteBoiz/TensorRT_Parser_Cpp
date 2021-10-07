@@ -61,7 +61,7 @@ make
 - [ ] Multiple inputs model.
 - [x] Multiple outputs model.
 - [ ] Add Channel last image allocate.
-- [ ] Change Primary GPU. 
+- [x] Switch Primary GPU. 
 - [ ] Multi-type cast for arguments (Easy to maintain).
 - [ ] Non-image input model.
 - [ ] Add examples.
