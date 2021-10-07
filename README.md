@@ -43,6 +43,7 @@ make
     - `--workspace` `int`: max workspace size **default=1300 MB**.
     - `--tensor` `string`: input tensor's name ***(dynamic shape input only)***.
     - `--dims` `array(int)`: input tensor's dimension ***(dynamic shape input only)***. 
+    - `--gpu` `int` : gpu number **(default=0)**.
 
    **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
 
@@ -55,6 +56,7 @@ make
     - `--data` `string`: path to inference images's folder `required`.
     - `--batchSize` `int`: inference batchsize **default=1**.
     - `--softmax` `store_true`: add softmax to last layer of engine **default=false**.
+    - `--gpu` `int`: gpu number **(default=0)**.
 
 ## VI. TO-DO
 
@@ -62,7 +64,7 @@ make
 - [x] Multiple outputs model.
 - [ ] Add Channel last image allocate.
 - [x] Switch Primary GPU. 
-- [ ] Multi-type cast for arguments (Easy to maintain).
+- [x] Multi-type cast for arguments (Easy to maintain).
 - [ ] Non-image input model.
 - [ ] Add examples.
 - [ ] 2D,3D tensor sofmax execute.
