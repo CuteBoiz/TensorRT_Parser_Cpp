@@ -33,7 +33,7 @@ int main(int argc,char** argv) {
 	if (string(argv[1]) == "export") {
 		ExportConfig config;
 		if (!GetExportConfig(argc, argv, config)) {
-			cerr << "[ERROR] Get Arguments error!\n";
+			cerr << "[ERROR] Update ExportConfig Error !\n";
 			return -1;
 		}
 		if (!ExportOnnx2Trt(config)){
@@ -52,9 +52,10 @@ int main(int argc,char** argv) {
 		return -1;
 	}
 	else {
-		cout << "[ERROR] Undefined mode: '" << string(argv[1]) << "'. \n";
-		cout <<	"[export]: to export Onnx Engine => TensorRT Engine. \n\n";
-		cout << "[infer]: TensorRT engine inference. \n";
+		cout << "[ERROR] Undefined Mode: '" << string(argv[1]) << "'. \n\n";
+		cout << "[HELP] Mode:\n";
+		cout <<	"\t+ (export): Export Onnx Engine => TensorRT Engine. \n";
+		cout << "\t+ (infer): TensorRT engine inference. \n";
 		return -1;
 	}
 	
@@ -100,6 +101,11 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 	unsigned argsIndex = 1;
 	try {
 		for (unsigned i = 0; i < arguments.size(); i++) {
+			//Check next argument vailable
+			if (argsIndex < argc-1) { 
+				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
+			}
+			//Get value from arguments
 			if (arguments.at(i) == "--weight") {
 				enginePath = GetArgumentsValue(argc, argv, argsIndex, "file");
 			}
@@ -145,12 +151,12 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 				cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
 				return false;
 			}
-			if (argsIndex < argc-1) {
-				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
-			}
 		}
+		//Check next argument existance
+		if (argsIndex < argc-1 && !CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
 	}
 	catch (exception& err) {
+		cerr << "[ERROR] Get arguments error!\n";
 		cerr << err.what();
 		return false; 
 	}
@@ -194,6 +200,11 @@ bool TRT_Inference(int argc, char **argv) {
 
 	try{
 		for (unsigned i = 0; i < arguments.size(); i++) {
+			//Check next argument vailable
+			if (argsIndex + 1 <= argc){
+				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
+			}
+			//Get value from arguments
 			if (arguments.at(i) == "--weight"){
 				enginePath = GetArgumentsValue(argc, argv, argsIndex, "file");
 			}
@@ -218,10 +229,9 @@ bool TRT_Inference(int argc, char **argv) {
 				cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
 				return false;
 			}
-			if (argsIndex < argc-1){
-				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
-			}
 		}
+		//Check next argument existance
+		if (argsIndex < argc-1 && !CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
 	}
 	catch (exception& err) {
 		cerr << err.what();

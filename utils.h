@@ -22,6 +22,42 @@ modified date: 2021-10-07
 using namespace std;
 
 
+struct ExportConfig{
+    string onnxEnginePath;
+    unsigned maxBatchsize;
+    size_t maxWorkspaceSize;
+    bool useFP16;
+    bool useDynamicShape;
+    string inputTensorName;
+    vector<unsigned> tensorDims;
+
+    ExportConfig();
+    bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16);
+    bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16, const string tensorName, const vector<unsigned> dims);
+};
+
+struct TRTDestroy{
+    template< class T >
+    void operator()(T* obj) const{
+        if (obj){
+            obj->destroy();
+        }
+    }
+};
+
+
+template< class T >
+using TRTUniquePtr = unique_ptr< T, TRTDestroy >;
+static class Logger : public nvinfer1::ILogger{
+public:
+    void log(Severity severity, const char* msg) noexcept override{
+        if ((severity == Severity::kERROR) || (severity == Severity::kINTERNAL_ERROR)) {
+            cout << msg << endl;
+        }
+    }
+} gLogger;
+
+
 bool CheckFileIfExist(const string filePath);
 /*
 Check existance of a file.
@@ -84,41 +120,6 @@ Return:
  */
 
 
-struct ExportConfig{
-    string onnxEnginePath;
-    unsigned maxBatchsize;
-    size_t maxWorkspaceSize;
-    bool useFP16;
-    bool useDynamicShape;
-    string inputTensorName;
-    vector<unsigned> tensorDims;
-
-    ExportConfig();
-    bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16);
-    bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16, const string tensorName, const vector<unsigned> dims);
-};
-
-struct TRTDestroy{
-    template< class T >
-    void operator()(T* obj) const{
-        if (obj){
-            obj->destroy();
-        }
-    }
-};
-
-
-template< class T >
-using TRTUniquePtr = unique_ptr< T, TRTDestroy >;
-static class Logger : public nvinfer1::ILogger{
-public:
-    void log(Severity severity, const char* msg) noexcept override{
-        if ((severity == Severity::kERROR) || (severity == Severity::kINTERNAL_ERROR)) {
-            cout << msg << endl;
-        }
-    }
-} gLogger;
-
 nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig config);
 /*
 Load onnx engine as an ICudaEngine.
@@ -128,6 +129,14 @@ Return:
     <ICudaEngine> Executable Cuda engine. 
  */
 
+bool ShowEngineInfo(nvinfer1::ICudaEngine* engine);
+/*
+Show TensorRT engine info.
+Args:
+    enigne: a Parsed TensorRT enigne.
+Return:
+    <bool> Success checking;
+ */
 
 bool ExportOnnx2Trt(const ExportConfig config);
 

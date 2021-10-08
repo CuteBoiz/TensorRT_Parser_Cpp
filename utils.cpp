@@ -105,7 +105,7 @@ string GetArgumentsValue(const int argc, char** argv, unsigned& argsIndex, const
         argsIndex += 2;
     }
     if (argsIndex >= argc) {
-        throw std::invalid_argument("[ERROR] None value for argument!\n");
+        throw std::invalid_argument("[ERROR] Got None value for [" + string(argv[argsIndex-1]) + "]!\n");
     }    
     string value = string(argv[argsIndex]);
     if (type == "string"){
@@ -226,7 +226,7 @@ nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
 	unsigned maxBatchsize = exportConfig.maxBatchsize;
     bool useDynamicShape = exportConfig.useDynamicShape;
     bool useFP16 = exportConfig.useFP16;
-    cout << "[INFO] Enigne info: \n";
+    cout << "[INFO] Export info: \n";
     cout << "\t - Engine Path: " << onnxEnginePath << endl;
 	cout << "\t - Max inference batchsize: " << maxBatchsize << endl;
 	cout << "\t - Max workspace size: " << maxWorkspaceSize/1048576 << " MB" << endl;
@@ -244,9 +244,7 @@ nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
 	//Building enigne
 	TRTUniquePtr<nvinfer1::IBuilderConfig> config{ builder->createBuilderConfig() };
 	config->setMaxWorkspaceSize(maxWorkspaceSize);
-	
 	builder->setMaxBatchSize(maxBatchsize);
-
 	if (useDynamicShape){
 		string inputTensorName = exportConfig.inputTensorName;
 		vector<unsigned> tensorDims = exportConfig.tensorDims;
@@ -261,7 +259,6 @@ nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
 		profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{maxBatchsize, tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
 		config->addOptimizationProfile(profile);
 	}
-
 	if (useFP16){
 		if (builder->platformHasFastFp16()) {
 			cout << "[INFO] Model exporting in FP16 Fast Mode\n";
@@ -278,6 +275,31 @@ nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
 	return builder->buildEngineWithConfig(*network, *config);
 }
 
+bool ShowEngineInfo(nvinfer1::ICudaEngine* engine){
+	if (engine == nullptr){
+		cout << "[ERROR] ICuda Engine is null! \n";
+		return false;
+	}
+	cout << "[INFO] TensorRT Engine Info: \n";
+	cout << "\t - Max batchSize: " << engine->getMaxBatchSize() << endl;
+	cout << "\t - Engine size: " << engine->getDeviceMemorySize()/(1048576) << " MB (GPU Mem)" << endl; 
+	cout << "\t - Tensors: \n";
+	for (unsigned i = 0; i < engine->getNbBindings(); i++) {
+		string tensorName;
+		auto dims = engine->getBindingDimensions(i);
+		if (engine->bindingIsInput(i)) {
+			cout << "\t\t + (Input) '" << engine->getBindingName(i) << "': batchSize";
+		}
+		else{
+			cout << "\t\t + (Output) '" << engine->getBindingName(i) << "': batchSize";
+		}
+		for (unsigned j = 1; j < dims.nbDims; j++) {
+			cout << " x " << dims.d[j];
+		}
+		cout << endl;
+	}
+	return true;
+}
 
 bool ExportOnnx2Trt(const ExportConfig exportConfig) {	
 	string onnxEnginePath = exportConfig.onnxEnginePath;
@@ -329,7 +351,11 @@ bool ExportOnnx2Trt(const ExportConfig exportConfig) {
 		return false;
 	}
 	engineFile.write(static_cast<char*>(serializedEngine->data()), serializedEngine->size());
+
 	cout << "[INFO] '"<< TRTFilename <<"' Created! \n";
+	if (!ShowEngineInfo(engine)){
+		return false;
+	}
 	engine->destroy();
 	return !engineFile.fail();
 }

@@ -18,8 +18,7 @@ TRTParser::~TRTParser() {
 	this->context->destroy();
 }
 
-size_t TRTParser::GetSizeByDim(const nvinfer1::Dims& dims)
-{
+size_t TRTParser::GetDimensionSize(const nvinfer1::Dims& dims) {	
 	size_t size = 1;
 	for (unsigned i = 0; i < dims.nbDims; i++) {
 		size *= dims.d[i];
@@ -71,11 +70,6 @@ bool TRTParser::Init(const string enginePath) {
 			cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << this->engineSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nReduce workspacesize to continue.\n";
 			return false;
 		}
-
-		cout << "[INFO] TensorRT Engine Info: \n";
-		cout << "\t - Max batchSize: " << this->maxBatchSize << endl;
-		cout << "\t - Engine size: " << this->engine->getDeviceMemorySize()/(1048576) << " MB (GPU Mem)" << endl; 
-		cout << "\t - Tensors: \n";
 		for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
 			string tensorName;
 			auto dims = this->engine->getBindingDimensions(i);
@@ -96,17 +90,11 @@ bool TRTParser::Init(const string enginePath) {
 					cerr << "[ERROR] Input shape not valid! (If you used an non-image input, remove this condition! \n";
 					return false;
 				}
-				cout << "\t\t + (Input) '" << this->engine->getBindingName(i) << "': batchSize";
 				this->inputDims.emplace_back(dims);
 			}
 			else {
-				cout << "\t\t + (Output) '" << this->engine->getBindingName(i) << "': batchSize";
 				this->outputDims.emplace_back(dims);
-			}
-			for (unsigned j = 1; j < dims.nbDims; j++) {
-				cout << " x " << dims.d[j];
-			}
-			cout << endl;	
+			}	
 		}
 		if (this->inputDims.empty() || this->outputDims.empty()) {
 			cerr << "[ERROR] Expect at least one input and one output for network \n";
@@ -116,12 +104,15 @@ bool TRTParser::Init(const string enginePath) {
 			cerr << "[ERROR] [Unsupported mutiple-inputs] Your must use CudaMalloc() for other inputs then remove this condition to continue\n";
 			return false;
 		}
+		if (!ShowEngineInfo(engine)){
+			return false;
+		}
 		return true;
 	}
 }
 
 
-void TRTParser::PreprocessImage(vector<cv::Mat> images, float* gpu_input) {
+void TRTParser::AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer, const nvinfer1::Dims inputDims) {
 	auto imageSize = cv::Size(this->imgW, this->imgH);
 	for (unsigned i = 0; i < images.size(); i++){
 		//Upload images to GPU
@@ -130,53 +121,69 @@ void TRTParser::PreprocessImage(vector<cv::Mat> images, float* gpu_input) {
 			cerr << "[ERROR] Could not load Input image!! \n";
 			return;
 		}
-		cv::cuda::GpuMat gpu_frame;
-		gpu_frame.upload(image);
+		cv::cuda::GpuMat gImage;
+		gImage.upload(image);
 		//Resize
-		cv::cuda::GpuMat resized;
-		cv::cuda::resize(gpu_frame, resized, imageSize, 0, 0, cv::INTER_AREA);
+		cv::cuda::GpuMat gResized, gNormalized;
+		cv::cuda::resize(gImage, gResized, imageSize, 0, 0, cv::INTER_AREA);
 		//Normalize
-		cv::cuda::GpuMat flt_image;
-		resized.convertTo(flt_image, CV_32FC3, 1.f / 255.f);
-		cv::cuda::subtract(flt_image, cv::Scalar(0.485f, 0.456f, 0.406f), flt_image, cv::noArray(), -1);
-		cv::cuda::divide(flt_image, cv::Scalar(0.229f, 0.224f, 0.225f), flt_image, 1, -1);
+		gResized.convertTo(gNormalized, CV_32FC3, 1.f / 255.f);
+		cv::cuda::subtract(gNormalized, cv::Scalar(0.485f, 0.456f, 0.406f), gNormalized, cv::noArray(), -1);
+		cv::cuda::divide(gNormalized, cv::Scalar(0.229f, 0.224f, 0.225f), gNormalized, 1, -1);
 		//Allocate
 		if (this->imgC == 3){
 			if (this->isCHW){
 				vector< cv::cuda::GpuMat > chw;
 				for (unsigned j = 0; j < this->imgC; j++){
-					chw.emplace_back(cv::cuda::GpuMat(imageSize, CV_32FC1, gpu_input + (i*this->imgC+j)*this->imgW*this->imgH));
+					chw.emplace_back(cv::cuda::GpuMat(imageSize, CV_32FC1, gpuInputBuffer + (i*this->imgC+j)*this->imgW*this->imgH));
 				}
-				cv::cuda::split(flt_image, chw);
+				cv::cuda::split(gNormalized, chw);
 			}
 			else{
-				cout << "[ERROR] Does not support channels last yet!";
-				exit(-1);
+				size_t inputBufferSize = this->GetDimensionSize(inputDims);
+				cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), inputBufferSize*sizeof(float), cudaMemcpyDeviceToDevice);
 			}
 		}
 		else if (this->imgC == 1){
-			cudaMemcpyAsync(gpu_input, flt_image.ptr<float>(), flt_image.rows*flt_image.step, cudaMemcpyDeviceToDevice);
+			cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), gNormalized.rows*gNormalized.step, cudaMemcpyDeviceToDevice);
 		}
 	}
 }
 
-vector<float> TRTParser::PostprocessResult(float *gpu_output, const unsigned batchSize, const unsigned outputSize, const bool softMax) {
+void TRTParser::AllocateNonImageInput(void *pData, float* gpuInputBuffer, const nvinfer1::Dims inputDims){
+	size_t inputBufferSize = this->GetDimensionSize(inputDims);
+	cudaMemcpyAsync(gpuInputBuffer, pData, inputBufferSize*sizeof(float), cudaMemcpyHostToDevice);
+}
+
+
+vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigned batchSize, const nvinfer1::Dims outputDims, const bool softMax) {
+	//Create CPU buffer.
+	size_t outputSize = this->GetDimensionSize(outputDims)/outputDims.d[0];
 	vector< float > cpu_output(outputSize * batchSize);
-	cudaMemcpyAsync(cpu_output.data(), gpu_output, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
+
+	//Transfer data from GPU buffer to CPU buffer.
+	cudaMemcpyAsync(cpu_output.data(), gpuOutputBuffer, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
+
+	//Preform a softmax to classifier output.
 	if (softMax){
+		//Tranform to exp()
 		transform(cpu_output.begin(), cpu_output.end(), cpu_output.begin(), [](float val) {return exp(val);});
+
+		unsigned lastLayerSize = outputDims.d[int(outputDims.nbDims-1)];
     	for (unsigned i = 0; i < batchSize; i++){
-			float sum = 0;
-			for (unsigned j = 0; j < outputSize; j++){
-				sum += cpu_output.at(i*outputSize + j);
-			}
-			for (unsigned k = 0; k < outputSize; k++){
-				cpu_output.at(i*outputSize + k) /=  sum;
-			}
+    		float sum = 0;
+    		for (unsigned n = 0; n < lastLayerSize; n++){
+    			sum += cpu_output.at(i*lastLayerSize + n);
+    		}
+    		for (unsigned n = 0; n < lastLayerSize; n++){
+ 				cpu_output.at(i*lastLayerSize + n) /=  sum;
+ 			}
 		}
 	}
 	return cpu_output;
 }
+
+
 
 bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 	unsigned batchSize = images.size();
@@ -185,27 +192,28 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 		cerr << "[ERROR] Batch size must be smaller or equal " << this->maxBatchSize << endl;
 		return false;
 	}
+	//Create buffer on GPU device
 	vector< void* > buffers(this->engine->getNbBindings());
-
 	for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
 		auto dims = this->engine->getBindingDimensions(i);
-		auto binding_size = this->GetSizeByDim(dims) * sizeof(float);
+		auto binding_size = this->GetDimensionSize(dims) * sizeof(float);
 		cudaMalloc(&buffers[i], binding_size);
 	}
 	
-	this->PreprocessImage(images, (float*)buffers[0]);
+	this->AllocateImageInput(images, (float*)buffers[0], this->inputDims[0]);
 
 	this->context->enqueueV2(buffers.data(), 0, nullptr);
 
 	for (unsigned i = 0; i < this->outputDims.size(); i++){
 		vector<float> result;
-		unsigned outputSize = this->GetSizeByDim(outputDims[i])/outputDims[i].d[0];
-		result = this->PostprocessResult((float *)buffers[i+nrofInputs], batchSize, outputSize, softMax);
+		unsigned lastLayerSize = this->outputDims[i].d[int(outputDims[i].nbDims-1)];
+
+		result = this->PostprocessResult((float *)buffers[i+nrofInputs], batchSize, outputDims[i], softMax);
 
 		cout << "Result: \n";
 		for (unsigned j = 0; j < batchSize; j++){
-			for (unsigned k = 0; k < outputSize; k++){
-				cout << result.at(j*outputSize + k) << ' ';
+			for (unsigned k = 0; k < lastLayerSize; k++){
+				cout << result.at(j*lastLayerSize + k) << ' ';
 			}
 			cout << endl;
 		}

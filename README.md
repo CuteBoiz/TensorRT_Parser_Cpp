@@ -62,10 +62,12 @@ make
 
 - [ ] Multiple inputs model.
 - [x] Multiple outputs model.
-- [ ] Add Channel last image allocate.
+- [x] Add Channel last image allocate.
 - [x] Switch Primary GPU. 
 - [x] Multi-type cast for arguments (Easy to maintain).
-- [ ] Non-image input model.
+- [x] Non-image input model.
 - [ ] Add examples.
-- [ ] 2D,3D tensor sofmax execute.
-- [ ] Remove "Segmentation fault (core dumped)" at ending of inference. 
+- [x] 2D,3D tensor sofmax execute.
+- [ ] Remove "Segmentation fault (core dumped)" at ending of inference.
+- [ ] CUDA allocate exception handle.
+- [ ] Support INT model.

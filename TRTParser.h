@@ -33,9 +33,11 @@ private:
 	nvinfer1::IExecutionContext* context;
 
 	nvinfer1::ICudaEngine* LoadTRTEngine(const string enginePath);
-	size_t GetSizeByDim(const nvinfer1::Dims& dims);
-	void PreprocessImage(vector<cv::Mat> images, float* gpu_input);
-	vector<float> PostprocessResult(float *gpu_output, const unsigned batch_size, const unsigned output_size, const bool softMax);
+	size_t GetDimensionSize(const nvinfer1::Dims& dims);
+
+	void AllocateNonImageInput(void *pData, float* gpuInputBuffer, const nvinfer1::Dims inputDims);
+	void AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer, const nvinfer1::Dims inputDims);
+	vector<float> PostprocessResult(float *gpuOutputBuffer, const unsigned batch_size, const nvinfer1::Dims outputDims, const bool softMax);
 public:
 	TRTParser();
 	~TRTParser();
