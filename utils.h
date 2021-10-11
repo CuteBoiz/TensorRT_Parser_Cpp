@@ -2,7 +2,7 @@
 Ultitities for convert and infer tensorrt engine.
 
 author: phatnt.
-modified date: 2021-10-07
+modified date: 2021-10-11
  */
 
 #ifndef _UTILS_HPP_
@@ -21,6 +21,15 @@ modified date: 2021-10-07
 #include <errno.h>
 using namespace std;
 
+inline bool CudaCheck(cudaError_t status){                                                                       
+    if (status != cudaSuccess){                                                   
+        cout << "[ERROR] [CUDA Failure] " << cudaGetErrorString(status) 
+             << " in file "<< __FILE__                                  
+             << " at line " << __LINE__ << endl;                        
+        return false;                                                    
+    }
+    return true;                                                   
+}
 
 struct ExportConfig{
     string onnxEnginePath;
@@ -35,6 +44,20 @@ struct ExportConfig{
     bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16);
     bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16, const string tensorName, const vector<unsigned> dims);
 };
+
+struct Tensor{
+    string tensorName;
+    bool isCHW;
+    unsigned tensorSize;
+    nvinfer1::Dims dims;
+    nvinfer1::DataType type;
+    nvinfer1::TensorFormat format;
+
+    Tensor();
+    Tensor(nvinfer1::ICudaEngine* engine, const unsigned bindingIndex);
+};
+
+static ostream& operator << (ostream& os, const Tensor& x);
 
 struct TRTDestroy{
     template< class T >

@@ -1,19 +1,15 @@
 #include "TRTParser.h"
 
 TRTParser::TRTParser() {
-	this->imgH = 0;
-	this->imgW = 0;
-	this->imgC = 0;
 	this->engineSize = 0;
 	this->maxBatchSize = 0;
-	this->isCHW = false;
 	this->engine = nullptr;
 	this->context = nullptr;
 }
 
 TRTParser::~TRTParser() {
-	this->inputDims.clear();
-	this->outputDims.clear();
+	this->inputTensors.clear();
+	this->outputTensors.clear();
 	this->engine->destroy();
 	this->context->destroy();
 }
@@ -65,43 +61,22 @@ bool TRTParser::Init(const string enginePath) {
 		this->context = this->engine->createExecutionContext();
 		this->engineSize = this->engine->getDeviceMemorySize();
 		size_t totalDevMem, freeDevMem;
-		cudaMemGetInfo(&freeDevMem, &totalDevMem);
+		if (!CudaCheck(cudaMemGetInfo(&freeDevMem, &totalDevMem))) return false;
 		if (this->engineSize > freeDevMem) {
 			cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << this->engineSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nReduce workspacesize to continue.\n";
 			return false;
 		}
 		for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
-			string tensorName;
-			auto dims = this->engine->getBindingDimensions(i);
+			Tensor tensor(this->engine, i);
 			if (this->engine->bindingIsInput(i)) {
-				if (dims.d[3] == 3 || dims.d[3] == 1) {
-					this->imgH = dims.d[1];
-					this->imgW = dims.d[2];
-					this->imgC = dims.d[3];
-					this->isCHW = false;
-				}
-				else if (dims.d[1] == 3 || dims.d[1] == 1) { 
-					this->imgH = dims.d[2];
-					this->imgW = dims.d[3];
-					this->imgC = dims.d[1];
-					this->isCHW = true;
-				}
-				else {
-					cerr << "[ERROR] Input shape not valid! (If you used an non-image input, remove this condition! \n";
-					return false;
-				}
-				this->inputDims.emplace_back(dims);
+				this->inputTensors.emplace_back(tensor);
 			}
 			else {
-				this->outputDims.emplace_back(dims);
+				this->outputTensors.emplace_back(tensor);
 			}	
 		}
-		if (this->inputDims.empty() || this->outputDims.empty()) {
+		if (this->inputTensors.empty() || this->outputTensors.empty()) {
 			cerr << "[ERROR] Expect at least one input and one output for network \n";
-			return false;
-		}
-		if (this->inputDims.size() > 1) {
-			cerr << "[ERROR] [Unsupported mutiple-inputs] Your must use CudaMalloc() for other inputs then remove this condition to continue\n";
 			return false;
 		}
 		if (!ShowEngineInfo(engine)){
@@ -112,14 +87,29 @@ bool TRTParser::Init(const string enginePath) {
 }
 
 
-void TRTParser::AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer, const nvinfer1::Dims inputDims) {
-	auto imageSize = cv::Size(this->imgW, this->imgH);
-	for (unsigned i = 0; i < images.size(); i++){
+bool TRTParser::AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer, const unsigned inputIndex) {
+	if (inputIndex >= this->inputTensors.size()) {
+		cerr << "[ERROR] inputIndex is greater than number of inputTensor's index!\n";
+		return false;
+	}
+	unsigned imgH, imgW, imgC;
+	if (!inputTensors.at(inputIndex).isCHW){
+		imgH = this->inputTensors.at(inputIndex).dims.d[1];
+		imgW = this->inputTensors.at(inputIndex).dims.d[2];
+		imgC = this->inputTensors.at(inputIndex).dims.d[3];
+	}
+	else { 
+		imgH = this->inputTensors.at(inputIndex).dims.d[2];
+		imgW = this->inputTensors.at(inputIndex).dims.d[3];
+		imgC = this->inputTensors.at(inputIndex).dims.d[1];
+	}
+	auto imageSize = cv::Size(imgW, imgH);
+	for (unsigned i = 0; i < images.size(); i++) {
 		//Upload images to GPU
 		cv::Mat image = images[i];
 		if (image.empty()) {
 			cerr << "[ERROR] Could not load Input image!! \n";
-			return;
+			return false;
 		}
 		cv::cuda::GpuMat gImage;
 		gImage.upload(image);
@@ -131,51 +121,70 @@ void TRTParser::AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer
 		cv::cuda::subtract(gNormalized, cv::Scalar(0.485f, 0.456f, 0.406f), gNormalized, cv::noArray(), -1);
 		cv::cuda::divide(gNormalized, cv::Scalar(0.229f, 0.224f, 0.225f), gNormalized, 1, -1);
 		//Allocate
-		if (this->imgC == 3){
-			if (this->isCHW){
-				vector< cv::cuda::GpuMat > chw;
-				for (unsigned j = 0; j < this->imgC; j++){
-					chw.emplace_back(cv::cuda::GpuMat(imageSize, CV_32FC1, gpuInputBuffer + (i*this->imgC+j)*this->imgW*this->imgH));
+		if (imgC == 3){
+			if (this->inputTensors.at(inputIndex).isCHW){
+				try {
+					vector< cv::cuda::GpuMat > chw;
+					for (unsigned j = 0; j < imgC; j++) {
+						chw.emplace_back(cv::cuda::GpuMat(imageSize, CV_32FC1, gpuInputBuffer + (i*imgC+j)*imgW*imgH));
+					}
+					cv::cuda::split(gNormalized, chw);
+					return true;
 				}
-				cv::cuda::split(gNormalized, chw);
+				catch (cv::Exception& e) {
+    				cout << "[ERROR] [OpenCV] Exception caught: " << e.what() << endl;
+    				return false;
+				}
 			}
-			else{
-				size_t inputBufferSize = this->GetDimensionSize(inputDims);
-				cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), inputBufferSize*sizeof(float), cudaMemcpyDeviceToDevice);
+			else {
+				size_t inputBufferSize = this->GetDimensionSize(this->inputTensors.at(inputIndex).dims);
+				if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), inputBufferSize*sizeof(float), cudaMemcpyDeviceToDevice))) return false;
+				return true;
 			}
 		}
-		else if (this->imgC == 1){
-			cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), gNormalized.rows*gNormalized.step, cudaMemcpyDeviceToDevice);
+		else if (imgC == 1) {
+			if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), gNormalized.rows*gNormalized.step, cudaMemcpyDeviceToDevice))) return false;
+			return true;
 		}
 	}
 }
 
-void TRTParser::AllocateNonImageInput(void *pData, float* gpuInputBuffer, const nvinfer1::Dims inputDims){
-	size_t inputBufferSize = this->GetDimensionSize(inputDims);
-	cudaMemcpyAsync(gpuInputBuffer, pData, inputBufferSize*sizeof(float), cudaMemcpyHostToDevice);
+bool TRTParser::AllocateNonImageInput(void *pData, float* gpuInputBuffer, const unsigned inputIndex){
+	if (inputIndex >= this->inputTensors.size()){
+		cerr << "[ERROR] inputIndex is greater than number of inputTensor's index!\n";
+		return false;
+	}
+	size_t inputBufferSize = this->GetDimensionSize(this->inputTensors.at(inputIndex).dims);
+	if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, pData, inputBufferSize * this->inputTensors.at(inputIndex).tensorSize, cudaMemcpyHostToDevice))) return false;
+	return true;
 }
 
 
-vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigned batchSize, const nvinfer1::Dims outputDims, const bool softMax) {
+vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigned batchSize, const unsigned outputIndex, const bool softMax) {
+	if (outputIndex >= this->outputTensors.size()){
+		throw std::overflow_error("[ERROR] outputIndex is greater than number of outputTensor's index!\n");
+	}
 	//Create CPU buffer.
-	size_t outputSize = this->GetDimensionSize(outputDims)/outputDims.d[0];
+	size_t outputSize = this->GetDimensionSize(this->outputTensors.at(outputIndex).dims)/this->outputTensors.at(outputIndex).dims.d[0];
 	vector< float > cpu_output(outputSize * batchSize);
 
 	//Transfer data from GPU buffer to CPU buffer.
-	cudaMemcpyAsync(cpu_output.data(), gpuOutputBuffer, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost);
+	if (!CudaCheck(cudaMemcpyAsync(cpu_output.data(), gpuOutputBuffer, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost))) {
+		throw std::overflow_error("[ERROR] Get data from device to host failure!\n");
+	}
 
 	//Preform a softmax to classifier output.
 	if (softMax){
-		//Tranform to exp()
+		//Apply Exponentialfunction to result
 		transform(cpu_output.begin(), cpu_output.end(), cpu_output.begin(), [](float val) {return exp(val);});
 
-		unsigned lastLayerSize = outputDims.d[int(outputDims.nbDims-1)];
+		unsigned lastLayerSize = this->outputTensors.at(outputIndex).dims.d[int(this->outputTensors.at(outputIndex).dims.nbDims-1)];
     	for (unsigned i = 0; i < batchSize; i++){
     		float sum = 0;
-    		for (unsigned n = 0; n < lastLayerSize; n++){
+    		for (unsigned n = 0; n < lastLayerSize; n++) {
     			sum += cpu_output.at(i*lastLayerSize + n);
     		}
-    		for (unsigned n = 0; n < lastLayerSize; n++){
+    		for (unsigned n = 0; n < lastLayerSize; n++) {
  				cpu_output.at(i*lastLayerSize + n) /=  sum;
  			}
 		}
@@ -184,31 +193,47 @@ vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigne
 }
 
 
-
 bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 	unsigned batchSize = images.size();
-	unsigned nrofInputs = this->inputDims.size();
 	if (batchSize > this->maxBatchSize){
 		cerr << "[ERROR] Batch size must be smaller or equal " << this->maxBatchSize << endl;
 		return false;
 	}
+
 	//Create buffer on GPU device
 	vector< void* > buffers(this->engine->getNbBindings());
 	for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
 		auto dims = this->engine->getBindingDimensions(i);
 		auto binding_size = this->GetDimensionSize(dims) * sizeof(float);
-		cudaMalloc(&buffers[i], binding_size);
+		if (!CudaCheck(cudaMalloc(&buffers[i], binding_size))) return false;
 	}
-	
-	this->AllocateImageInput(images, (float*)buffers[0], this->inputDims[0]);
 
+	//Allocate data to GPU. 
+	//If you have multiple inputs add AllocateImageInput or AllocateNonImageInput with coresponding inputIndex
+	if (!this->AllocateImageInput(images, (float*)buffers[0], 0)){
+		cerr << "[ERROR] Allocate Input error!\n";
+		return false;
+	}
+
+	if (this->inputTensors.size() > 1) {
+		cerr << "[ERROR] Your must add AllocateImageInput or AllocateNonImageInput with coresponding inputIndex for other inputs above / add data for Inference()'s arguments then remove this condition at " << __FILE__ << ":" << __LINE__<< " to continue!\n";
+		return false;
+	}
+	//Model Inference on GPU
 	this->context->enqueueV2(buffers.data(), 0, nullptr);
 
-	for (unsigned i = 0; i < this->outputDims.size(); i++){
+	//Transfer result from GPU to CPU
+	for (unsigned i = 0; i < this->outputTensors.size(); i++) {
 		vector<float> result;
-		unsigned lastLayerSize = this->outputDims[i].d[int(outputDims[i].nbDims-1)];
+		unsigned lastLayerSize = this->outputTensors.at(i).dims.d[int(this->outputTensors.at(i).dims.nbDims-1)];
 
-		result = this->PostprocessResult((float *)buffers[i+nrofInputs], batchSize, outputDims[i], softMax);
+		try {
+			result = this->PostprocessResult((float *)buffers[i+this->inputTensors.size()], batchSize, i, softMax);
+		}
+		catch (exception& err) {
+			cerr << err.what();
+			return false;
+		}
 
 		cout << "Result: \n";
 		for (unsigned j = 0; j < batchSize; j++){
@@ -218,8 +243,10 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 			cout << endl;
 		}
 	}
+
+	//Deallocate memory to avoid memory leak
 	for (void* buf : buffers) {
-		cudaFree(buf);
+		if (!CudaCheck(cudaFree(buf))) return false;
 	}
 	return true;
 }

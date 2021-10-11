@@ -60,7 +60,7 @@ make
 
 ## VI. TO-DO
 
-- [ ] Multiple inputs model.
+- [x] Multiple inputs model.
 - [x] Multiple outputs model.
 - [x] Add Channel last image allocate.
 - [x] Switch Primary GPU. 
@@ -69,5 +69,6 @@ make
 - [ ] Add examples.
 - [x] 2D,3D tensor sofmax execute.
 - [ ] Remove "Segmentation fault (core dumped)" at ending of inference.
-- [ ] CUDA allocate exception handle.
-- [ ] Support INT model.
+- [x] CUDA allocate exception handle.
+- [x] Support INT model.
+- [ ] Add CudaStream.

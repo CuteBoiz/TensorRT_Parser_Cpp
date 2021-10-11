@@ -2,7 +2,7 @@
 TensorRT Parser Class.
 
 author: phatnt.
-modified date: 2021-09-29
+modified date: 2021-10-11
 
  */
 #pragma once
@@ -23,11 +23,10 @@ using namespace std;
 
 class TRTParser {
 private:
-	unsigned imgH, imgW, imgC, maxBatchSize;
-	bool isCHW;
+	unsigned maxBatchSize;
 	size_t engineSize;
-	vector< nvinfer1::Dims > inputDims;
-	vector< nvinfer1::Dims > outputDims;
+	vector< Tensor > inputTensors;
+	vector< Tensor > outputTensors;
 	
 	nvinfer1::ICudaEngine* engine;
 	nvinfer1::IExecutionContext* context;
@@ -35,9 +34,10 @@ private:
 	nvinfer1::ICudaEngine* LoadTRTEngine(const string enginePath);
 	size_t GetDimensionSize(const nvinfer1::Dims& dims);
 
-	void AllocateNonImageInput(void *pData, float* gpuInputBuffer, const nvinfer1::Dims inputDims);
-	void AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer, const nvinfer1::Dims inputDims);
-	vector<float> PostprocessResult(float *gpuOutputBuffer, const unsigned batch_size, const nvinfer1::Dims outputDims, const bool softMax);
+	bool AllocateNonImageInput(void *pData, float* gpuInputBuffer, const unsigned inputIndex);
+	bool AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer, const unsigned inputIndex);
+	vector<float> PostprocessResult(float *gpuOutputBuffer, const unsigned batch_size, const unsigned outputIndex, const bool softMax);
+
 public:
 	TRTParser();
 	~TRTParser();

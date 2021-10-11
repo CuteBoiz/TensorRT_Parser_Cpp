@@ -1,5 +1,5 @@
 #include "utils.h"
-
+using namespace nvinfer1;
 
 bool CheckFileIfExist(const string filePath) {
 	ifstream f(filePath, ios::binary);
@@ -30,13 +30,9 @@ bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names) {
 
 bool SetPrimaryCudaDevice(const unsigned gpuNum){
     int deviceCount = 0;
-    cudaError_t err = cudaSuccess;
 
-    err = cudaGetDeviceCount(&deviceCount);
-    if (err != cudaSuccess) {
-        cerr << "[ERROR] " << cudaGetErrorString(err) << endl; 
-        return false;
-    }
+    if (!CudaCheck(cudaGetDeviceCount(&deviceCount))) return false;
+
     else {
         cout << "[INFO] Device Count: " << deviceCount << endl;
     }
@@ -44,17 +40,13 @@ bool SetPrimaryCudaDevice(const unsigned gpuNum){
         cout << "[ERROR] Gpu num must smaller than '" << deviceCount <<"'. \n";
         return false;
     }
-    err = cudaSetDevice(gpuNum);
+    if (!CudaCheck(cudaSetDevice(gpuNum))) return false;
 
-    if (err == cudaSuccess) {
-    	size_t totalDevMem, freeDevMem;
-		cudaMemGetInfo(&freeDevMem, &totalDevMem);
-        cout << "[INFO] Switched to GPU:" << gpuNum << " success! Free memory: " << freeDevMem/1048576 <<"MB. \n";
-        return true;
-    }
-    else{
-        return false;
-    }
+	size_t totalDevMem, freeDevMem;
+	if (!CudaCheck(cudaMemGetInfo(&freeDevMem, &totalDevMem))) return false;
+    cout << "[INFO] Switched to GPU:" << gpuNum << " success! Free memory: " << freeDevMem/1048576 <<"MB. \n";
+    return true;
+
 }
 
 bool CheckRequiredArguments(const vector<string> required_args, const vector<string> args){
@@ -177,7 +169,7 @@ bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize
         return false;
     }
     size_t totalDevMem, freeDevMem;
-    cudaMemGetInfo(&freeDevMem, &totalDevMem);
+    if (!CudaCheck(cudaMemGetInfo(&freeDevMem, &totalDevMem))) return false;
     if (maxWorkspaceSize > freeDevMem) {
         cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << maxWorkspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
         return false;
@@ -204,7 +196,7 @@ bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize
         return false;
     }
     size_t totalDevMem, freeDevMem;
-    cudaMemGetInfo(&freeDevMem, &totalDevMem);
+    if (!CudaCheck(cudaMemGetInfo(&freeDevMem, &totalDevMem))) return false;
     if (maxWorkspaceSize > freeDevMem) {
         cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << maxWorkspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
         return false;
@@ -218,6 +210,114 @@ bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize
         return false;
     }
     return true;
+}
+
+Tensor::Tensor(){
+	throw std::invalid_argument("[ERROR] Un-Initialize tensor!\n");
+	abort();
+}
+
+Tensor::Tensor(nvinfer1::ICudaEngine* engine, const unsigned bindingIndex){
+    if (bindingIndex >= engine->getNbBindings()){
+        throw std::invalid_argument("[ERROR] bindingIndex is more than engine's binding index");
+        abort();
+    }
+    tensorName = engine->getBindingName(bindingIndex);
+    dims = engine->getBindingDimensions(bindingIndex);
+    type = engine->getBindingDataType(bindingIndex);
+    format = engine->getBindingFormat(bindingIndex);
+
+    if (type == nvinfer1::DataType::kFLOAT) {
+        tensorSize = sizeof(float);
+    }
+    else if (type == nvinfer1::DataType::kHALF) {
+        tensorSize = sizeof(float)/2;
+    }
+    else if (type == nvinfer1::DataType::kINT8) {
+        tensorSize = sizeof(int8_t);
+    }
+    else if (type == nvinfer1::DataType::kINT32) {
+        tensorSize = sizeof(int32_t);
+    }
+    else if (type == nvinfer1::DataType::kBOOL) {
+        tensorSize = sizeof(bool);
+    }
+
+    if (format == TensorFormat::kLINEAR || format == TensorFormat::kCHW2 || format == TensorFormat::kCHW4 || format == TensorFormat::kCHW16 
+        || format == TensorFormat::kCHW32|| format ==  TensorFormat::kCDHW32|| format == TensorFormat::kDLA_LINEAR){
+        isCHW = true;
+    }
+    else if (format == TensorFormat::kHWC8 || format == TensorFormat::kDHWC8 || format == TensorFormat::kHWC || format == TensorFormat::kDLA_HWC4 || format == TensorFormat::kHWC16){
+        isCHW = false;
+    }
+    else{
+        throw ("[ERROR] Unsupported TensorFormat! Check TensorRT Document 'TensorFormat' to add new format!\n");
+        abort();
+    }
+}
+
+ostream& operator << (ostream& os, const Tensor& x) {
+    //Tensor name
+    os << x.tensorName << " :batchsize";
+    //Tensor dims
+    for (unsigned i = 1; i < x.dims.nbDims; i++) {
+        os << " x " << x.dims.d[i];
+    }
+    //Tensor type
+    if (x.type == nvinfer1::DataType::kFLOAT) {
+        os << " (kFLOAT/";
+    }
+    else if (x.type == nvinfer1::DataType::kHALF) {
+        os << " (kHALF/";
+    }
+    else if (x.type == nvinfer1::DataType::kINT8) {
+        os << " (kINT8/";
+    }
+    else if (x.type == nvinfer1::DataType::kINT32) {
+        os << " (kINT32/";
+    }
+    else if (x.type == nvinfer1::DataType::kBOOL) {
+        os << " (kBOOL/";
+    }
+    //TensorFormat
+    if (x.format == TensorFormat::kLINEAR) {
+        os << "kLINEAR)";
+    }
+    else if (x.format == TensorFormat::kCHW2){
+        os << "kCHW2)";
+    }
+    else if (x.format == TensorFormat::kHWC8){
+        os << "kHWC8)";
+    }
+    else if (x.format == TensorFormat::kCHW4){
+        os << "kCHW4)";
+    }
+    else if (x.format == TensorFormat::kCHW16){
+        os << "kCHW16)";
+    }
+    else if (x.format == TensorFormat::kCHW32){
+        os << "kCHW32)";
+    }
+    else if (x.format == TensorFormat::kDHWC8){
+        os << "kDHWC8)";
+    }
+    else if (x.format == TensorFormat::kCDHW32){
+        os << "kCDHW32)";
+    }
+    else if (x.format == TensorFormat::kHWC){
+        os << "kHWC)";
+    }
+    else if (x.format == TensorFormat::kDLA_LINEAR){
+        os << "kDLA_LINEAR)";
+    }
+    else if (x.format == TensorFormat::kDLA_HWC4){
+        os << "kDLA_HWC4)";
+    }
+    else if (x.format == TensorFormat::kHWC16){
+        os << "kHWC16)";
+    }
+
+    return os;
 }
 
 nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
@@ -285,18 +385,13 @@ bool ShowEngineInfo(nvinfer1::ICudaEngine* engine){
 	cout << "\t - Engine size: " << engine->getDeviceMemorySize()/(1048576) << " MB (GPU Mem)" << endl; 
 	cout << "\t - Tensors: \n";
 	for (unsigned i = 0; i < engine->getNbBindings(); i++) {
-		string tensorName;
-		auto dims = engine->getBindingDimensions(i);
+		Tensor x(engine, i);
 		if (engine->bindingIsInput(i)) {
-			cout << "\t\t + (Input) '" << engine->getBindingName(i) << "': batchSize";
+			cout << "\t\t + (Input) '" << x << endl;
 		}
 		else{
-			cout << "\t\t + (Output) '" << engine->getBindingName(i) << "': batchSize";
+			cout << "\t\t + (Output) '" << x << endl;
 		}
-		for (unsigned j = 1; j < dims.nbDims; j++) {
-			cout << " x " << dims.d[j];
-		}
-		cout << endl;
 	}
 	return true;
 }
