@@ -55,6 +55,20 @@ bool CheckRequiredArguments(const vector<string> required_args, const vector<str
 	for (unsigned i = 0; i < args.size(); i++) {
 		str_args += args.at(i);
 	}
+    for (unsigned i = 0; i < args.size(); i++) {
+        string check_arg = args.at(i);
+        unsigned count = 0;
+        for (unsigned j = 0; j < args.size(); j++){
+            if (check_arg == args.at(j)){
+                count++;
+                if (count >= 2){
+                    cerr << "[ERROR] Duplicated Arguments [" << check_arg <<"]!\n";
+                    return false;
+                }
+            }
+        }
+        
+    }
 	for (unsigned i = 0; i < required_args.size(); i++) {
 		if (str_args.rfind(required_args.at(i)) == -1) {
 			missed_args.emplace_back(required_args.at(i));
@@ -318,6 +332,46 @@ ostream& operator << (ostream& os, const Tensor& x) {
     }
 
     return os;
+}
+
+vector< vector< cv::Mat >> PrepareImageBatch(string dataPath, const unsigned batchSize){
+    vector< string> fileNames;
+    vector< cv::Mat> images;
+    vector< vector < cv::Mat>> batchedImages;
+    //Get images form folder
+    if (dataPath[dataPath.length() - 1] != '/' && dataPath[dataPath.length() -1] != '\\') {
+        dataPath = dataPath + '/';
+    }
+    if (ReadFilesInDir(dataPath.c_str(), fileNames)) {
+        cout << "[INFO] Load data from '" << dataPath << "' success! Total " << fileNames.size() << " files. \n";
+    }
+    else{
+        throw std::invalid_argument("[ERROR] Could not read files from '" + dataPath + "'!\n");
+        abort();
+    }
+    unsigned i = 0;
+    for (unsigned f = 0; f < fileNames.size(); f += i) {
+        //Prepare inference batch
+        unsigned batchIndex = 0;
+        for (i = 0; batchIndex < batchSize && (f + i) < fileNames.size(); i++) {
+            string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
+            if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
+                cout << fileNames[f + i] << endl;
+                cv::Mat image = cv::imread(dataPath + fileNames[f + i]);
+                images.emplace_back(image);
+                batchIndex++;
+            }
+            else{
+                cout << "[WARNING] '" << fileNames[f + i] << "' not an image! \n";
+            }
+        }
+        if (images.size() == 0) {
+            continue; //Skip if got a non-image files stack.
+        }
+        batchedImages.emplace_back(images);
+        images.clear();
+    }
+    return batchedImages;
 }
 
 nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {

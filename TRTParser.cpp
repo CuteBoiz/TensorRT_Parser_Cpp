@@ -106,47 +106,50 @@ bool TRTParser::AllocateImageInput(vector<cv::Mat> images, float* gpuInputBuffer
 	auto imageSize = cv::Size(imgW, imgH);
 	for (unsigned i = 0; i < images.size(); i++) {
 		//Upload images to GPU
-		cv::Mat image = images[i];
+		cv::Mat image = images.at(i);
 		if (image.empty()) {
 			cerr << "[ERROR] Could not load Input image!! \n";
 			return false;
 		}
-		cv::cuda::GpuMat gImage;
-		gImage.upload(image);
+		cv::cuda::GpuMat gpuImage;
+		gpuImage.upload(image);
 		//Resize
-		cv::cuda::GpuMat gResized, gNormalized;
-		cv::cuda::resize(gImage, gResized, imageSize, 0, 0, cv::INTER_AREA);
+		cv::cuda::GpuMat gpuResized, gpuImageFloat;
+		cv::cuda::resize(gpuImage, gpuResized, imageSize, 0, 0, cv::INTER_AREA);
 		//Normalize
-		gResized.convertTo(gNormalized, CV_32FC3, 1.f / 255.f);
-		cv::cuda::subtract(gNormalized, cv::Scalar(0.485f, 0.456f, 0.406f), gNormalized, cv::noArray(), -1);
-		cv::cuda::divide(gNormalized, cv::Scalar(0.229f, 0.224f, 0.225f), gNormalized, 1, -1);
+		gpuResized.convertTo(gpuImageFloat, CV_32FC3, 1.f / 255.f);
+		cv::cuda::subtract(gpuImageFloat, cv::Scalar(0.485f, 0.456f, 0.406f), gpuImageFloat, cv::noArray(), -1);
+		cv::cuda::divide(gpuImageFloat, cv::Scalar(0.229f, 0.224f, 0.225f), gpuImageFloat, 1, -1);
 		//Allocate
 		if (imgC == 3){
 			if (this->inputTensors.at(inputIndex).isCHW){
 				try {
+					cv::Mat test(gpuImageFloat);
 					vector< cv::cuda::GpuMat > chw;
 					for (unsigned j = 0; j < imgC; j++) {
 						chw.emplace_back(cv::cuda::GpuMat(imageSize, CV_32FC1, gpuInputBuffer + (i*imgC+j)*imgW*imgH));
 					}
-					cv::cuda::split(gNormalized, chw);
-					return true;
+					cv::cuda::split(gpuImageFloat, chw);
 				}
 				catch (cv::Exception& e) {
-    				cout << "[ERROR] [OpenCV] Exception caught: " << e.what() << endl;
+    				cout << "[ERROR] [OpenCV] Exception caught: " << e.what();
     				return false;
 				}
 			}
 			else {
 				size_t inputBufferSize = this->GetDimensionSize(this->inputTensors.at(inputIndex).dims);
-				if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), inputBufferSize*sizeof(float), cudaMemcpyDeviceToDevice))) return false;
-				return true;
+				if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, gpuImageFloat.ptr<float>(), inputBufferSize*sizeof(float), cudaMemcpyDeviceToDevice))) return false;
 			}
 		}
 		else if (imgC == 1) {
-			if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, gNormalized.ptr<float>(), gNormalized.rows*gNormalized.step, cudaMemcpyDeviceToDevice))) return false;
-			return true;
+			if (!CudaCheck(cudaMemcpyAsync(gpuInputBuffer, gpuImageFloat.ptr<float>(), gpuImageFloat.rows*gpuImageFloat.step, cudaMemcpyDeviceToDevice))) return false;
+		}
+		else {
+			cerr << "[ERROR] Undefined image channel!\n";
+			return false;
 		}
 	}
+	return true;
 }
 
 bool TRTParser::AllocateNonImageInput(void *pData, float* gpuInputBuffer, const unsigned inputIndex){
@@ -169,10 +172,9 @@ vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigne
 	vector< float > cpu_output(outputSize * batchSize);
 
 	//Transfer data from GPU buffer to CPU buffer.
-	if (!CudaCheck(cudaMemcpyAsync(cpu_output.data(), gpuOutputBuffer, cpu_output.size() * sizeof(float), cudaMemcpyDeviceToHost))) {
+	if (!CudaCheck(cudaMemcpyAsync(cpu_output.data(), gpuOutputBuffer, cpu_output.size() * this->outputTensors.at(outputIndex).tensorSize, cudaMemcpyDeviceToHost))) {
 		throw std::overflow_error("[ERROR] Get data from device to host failure!\n");
 	}
-
 	//Preform a softmax to classifier output.
 	if (softMax){
 		//Apply Exponentialfunction to result
@@ -189,12 +191,14 @@ vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigne
  			}
 		}
 	}
+
 	return cpu_output;
 }
 
 
 bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 	unsigned batchSize = images.size();
+	unsigned nrofInputs = this->inputTensors.size();
 	if (batchSize > this->maxBatchSize){
 		cerr << "[ERROR] Batch size must be smaller or equal " << this->maxBatchSize << endl;
 		return false;
@@ -204,8 +208,14 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 	vector< void* > buffers(this->engine->getNbBindings());
 	for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
 		auto dims = this->engine->getBindingDimensions(i);
-		auto binding_size = this->GetDimensionSize(dims) * sizeof(float);
-		if (!CudaCheck(cudaMalloc(&buffers[i], binding_size))) return false;
+		size_t bindingSize;
+		if (this->engine->bindingIsInput(i)){
+			bindingSize = this->GetDimensionSize(dims) * this->inputTensors.at(i).tensorSize;
+		}
+		else{
+			bindingSize = this->GetDimensionSize(dims) * this->outputTensors.at(i - nrofInputs).tensorSize;
+		}
+		if (!CudaCheck(cudaMalloc(&buffers[i], bindingSize))) return false;
 	}
 
 	//Allocate data to GPU. 
@@ -215,7 +225,7 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 		return false;
 	}
 
-	if (this->inputTensors.size() > 1) {
+	if (nrofInputs > 1) {
 		cerr << "[ERROR] Your must add AllocateImageInput or AllocateNonImageInput with coresponding inputIndex for other inputs above / add data for Inference()'s arguments then remove this condition at " << __FILE__ << ":" << __LINE__<< " to continue!\n";
 		return false;
 	}
@@ -228,7 +238,7 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 		unsigned lastLayerSize = this->outputTensors.at(i).dims.d[int(this->outputTensors.at(i).dims.nbDims-1)];
 
 		try {
-			result = this->PostprocessResult((float *)buffers[i+this->inputTensors.size()], batchSize, i, softMax);
+			result = this->PostprocessResult((float *)buffers[i+nrofInputs], batchSize, i, softMax);
 		}
 		catch (exception& err) {
 			cerr << err.what();

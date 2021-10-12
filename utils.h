@@ -19,6 +19,10 @@ modified date: 2021-10-11
 #include <iostream>
 #include <dirent.h>
 #include <errno.h>
+
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
 using namespace std;
 
 inline bool CudaCheck(cudaError_t status){                                                                       
@@ -162,13 +166,22 @@ Return:
  */
 
 bool ExportOnnx2Trt(const ExportConfig config);
-
 /*
 Export onnx engine to tensorrt engine .
 Args:
     config: config for onnx parse.
 Return:
     <bool> Success checking.
+ */
+
+vector< vector< cv::Mat >> PrepareImageBatch(string folderPath, const unsigned batchSize);
+/*
+Prepare batch for infernces.
+Args:
+    folderPath: path to inference images folder.
+    batchSize:  inference batchsize.
+Return:
+    vector< vector< cv::Mat >> batched images.
  */
 
 #endif

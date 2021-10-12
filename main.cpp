@@ -238,14 +238,10 @@ bool TRT_Inference(int argc, char **argv) {
 		return false; 
 	}
 	
-	if (dataPath[dataPath.length() - 1] != '/' && dataPath[dataPath.length() -1] != '\\') {
-		dataPath = dataPath + '/';
-	}
-	cv::Mat image;
-	vector<string> fileNames;
-	vector<cv::Mat> images;
+
 	TRTParser engine;
 	unsigned nrofInferIamges = 0;
+	vector< vector< cv::Mat >> batchedImages;
 	
  	//Initialize engine
 	if (engine.Init(enginePath)){
@@ -255,49 +251,27 @@ bool TRT_Inference(int argc, char **argv) {
 		cerr << "[ERROR] Could not parse tensorRT engine! \n";
 		return false;
 	}
-	//Get images form folder
-	if (ReadFilesInDir(dataPath.c_str(), fileNames)) {
-        cout << "[INFO] Load data from '" << dataPath << "' success! Total " << fileNames.size() << " files. \n";
-    }
-    else{
-    	cout << "[ERROR] Could not read files from"<< dataPath << endl;
-        return false;
-    }
-    unsigned i = 0;
-	for (unsigned f = 0; f < fileNames.size(); f += i) {
-		//Prepare inference batch
-		unsigned batchIndex = 0;
-		for (i = 0; batchIndex < batchsize && (f + i) < fileNames.size(); i++) {
-			string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
-			if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
-				cout << fileNames[f + i] << endl;
-				cv::Mat image = cv::imread(dataPath + fileNames[f + i]);
-				images.emplace_back(image);
-				batchIndex++;
-				nrofInferIamges++;
-			}
-			else{
-				cout << "[WARNING] '" << fileNames[f + i] << "' not an image! \n";
-			}
-		}
-		if (images.size() == 0) {
-			continue; //Skip if got a non-image files stack.
-		}
-		//Inference
-		auto start = chrono::system_clock::now();
-		if (!engine.Inference(images, useSofmax)){
+
+	//Prepare data
+	try {
+		batchedImages = PrepareImageBatch(dataPath, batchsize);
+	}
+	catch (exception& err){
+		cerr << err.what();
+		return false; 
+	}
+    
+    for (unsigned i = 0; i < batchedImages.size(); i++){
+    	auto start = chrono::system_clock::now();
+		if (!engine.Inference(batchedImages.at(i), useSofmax)){
 			cerr << "[ERROR] Inference error! \n";
 			return false;
 		}
 		auto end = chrono::system_clock::now();
 		cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
-
-		//Clear image temp memories
-		for (unsigned j = 0; j < images.size(); j++){
-			images.at(j).release();
-		}
-		images.clear();
-	}
+		nrofInferIamges += batchedImages.at(i).size();
+    }
+    batchedImages.clear();
 	cout << "[INFO] Total inferenced images: " << nrofInferIamges << endl;
 	return true;
 }
