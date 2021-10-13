@@ -261,7 +261,7 @@ Tensor::Tensor(nvinfer1::ICudaEngine* engine, const unsigned bindingIndex){
         || format == TensorFormat::kCHW32|| format ==  TensorFormat::kCDHW32|| format == TensorFormat::kDLA_LINEAR){
         isCHW = true;
     }
-    else if (format == TensorFormat::kHWC8 || format == TensorFormat::kDHWC8 || format == TensorFormat::kHWC || format == TensorFormat::kDLA_HWC4 || format == TensorFormat::kHWC16){
+    else if (format == TensorFormat::kHWC8 || format == TensorFormat::kDHWC8 || format == TensorFormat::kHWC || format == TensorFormat::kDLA_HWC4){
         isCHW = false;
     }
     else{
@@ -272,7 +272,7 @@ Tensor::Tensor(nvinfer1::ICudaEngine* engine, const unsigned bindingIndex){
 
 ostream& operator << (ostream& os, const Tensor& x) {
     //Tensor name
-    os << x.tensorName << " :batchsize";
+    os << "'" << x.tensorName << "' :batchsize";
     //Tensor dims
     for (unsigned i = 1; i < x.dims.nbDims; i++) {
         os << " x " << x.dims.d[i];
@@ -326,9 +326,6 @@ ostream& operator << (ostream& os, const Tensor& x) {
     }
     else if (x.format == TensorFormat::kDLA_HWC4){
         os << "kDLA_HWC4)";
-    }
-    else if (x.format == TensorFormat::kHWC16){
-        os << "kHWC16)";
     }
 
     return os;
@@ -441,10 +438,10 @@ bool ShowEngineInfo(nvinfer1::ICudaEngine* engine){
 	for (unsigned i = 0; i < engine->getNbBindings(); i++) {
 		Tensor x(engine, i);
 		if (engine->bindingIsInput(i)) {
-			cout << "\t\t + (Input) '" << x << endl;
+			cout << "\t\t + (Input) " << x << endl;
 		}
 		else{
-			cout << "\t\t + (Output) '" << x << endl;
+			cout << "\t\t + (Output) " << x << endl;
 		}
 	}
 	return true;

@@ -174,21 +174,66 @@ vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigne
 	//Transfer data from GPU buffer to CPU buffer.
 	if (!CudaCheck(cudaMemcpyAsync(cpu_output.data(), gpuOutputBuffer, cpu_output.size() * this->outputTensors.at(outputIndex).tensorSize, cudaMemcpyDeviceToHost))) {
 		throw std::overflow_error("[ERROR] Get data from device to host failure!\n");
+		abort();
 	}
 	//Preform a softmax to classifier output.
 	if (softMax){
 		//Apply Exponentialfunction to result
 		transform(cpu_output.begin(), cpu_output.end(), cpu_output.begin(), [](float val) {return exp(val);});
 
-		unsigned lastLayerSize = this->outputTensors.at(outputIndex).dims.d[int(this->outputTensors.at(outputIndex).dims.nbDims-1)];
-    	for (unsigned i = 0; i < batchSize; i++){
-    		float sum = 0;
-    		for (unsigned n = 0; n < lastLayerSize; n++) {
-    			sum += cpu_output.at(i*lastLayerSize + n);
-    		}
-    		for (unsigned n = 0; n < lastLayerSize; n++) {
- 				cpu_output.at(i*lastLayerSize + n) /=  sum;
- 			}
+		unsigned nrofDims = this->outputTensors.at(outputIndex).dims.nbDims;
+
+		//2D: batchsize x K
+		if (nrofDims == 2) { 
+			unsigned K = this->outputTensors.at(outputIndex).dims.d[1];
+	    	for (unsigned k = 0; k < batchSize; k++){
+	    		float sum = 0;
+	    		for (unsigned n = 0; n < K; n++) {
+	    			sum += cpu_output.at(k*K + n);
+	    		}
+	    		for (unsigned n = 0; n < K; n++) {
+	 				cpu_output.at(k*K + n) /=  sum;
+	 			}
+			}
+		}
+		// 3D: batchsize x L x K
+		else if (nrofDims == 3) { 
+			unsigned L =  this->outputTensors.at(outputIndex).dims.d[1];
+			unsigned K = this->outputTensors.at(outputIndex).dims.d[2];
+			for (unsigned l = 0; l < batchSize; l++){
+				for (unsigned k = 0; k < L; k++){
+		    		float sum = 0;
+		    		for (unsigned n = 0; n < K; n++) {
+		    			sum += cpu_output.at(l*(K*L) + k*K + n);
+		    		}
+		    		for (unsigned n = 0; n < K; n++) {
+		 				cpu_output.at(l*(K*L) +  k*K + n) /=  sum;
+		 			}
+		 		}
+			}
+		}
+		// 4D: batchsize x M x L x K
+		else if (nrofDims == 4) { 
+			unsigned M = this->outputTensors.at(outputIndex).dims.d[1];
+			unsigned L =  this->outputTensors.at(outputIndex).dims.d[2];
+			unsigned K = this->outputTensors.at(outputIndex).dims.d[3];
+			for (unsigned m = 0; m < batchSize; m++) {
+				for (unsigned l = 0; l < M; l++) {
+					for (unsigned k = 0; k < L; k++){
+			    		float sum = 0;
+			    		for (unsigned n = 0; n < K; n++) {
+			    			sum += cpu_output.at(m*(M*L*M) + l*(K*L) + k*K + n);
+			    		}
+			    		for (unsigned n = 0; n < K; n++) {
+			 				cpu_output.at(m*(M*L*M) + l*(K*L) +  k*K + n) /=  sum;
+			 			}
+			 		}
+				}
+			}
+		}
+		else {
+			throw std::overflow_error("[ERROR] Unsupported softmax for "+ to_string(nrofDims) +"D output!\n");
+			abort();
 		}
 	}
 
@@ -237,6 +282,7 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 		vector<float> result;
 		unsigned lastLayerSize = this->outputTensors.at(i).dims.d[int(this->outputTensors.at(i).dims.nbDims-1)];
 
+		cout << "'"<<this->outputTensors.at(i).tensorName << "':\n";
 		try {
 			result = this->PostprocessResult((float *)buffers[i+nrofInputs], batchSize, i, softMax);
 		}
@@ -245,13 +291,56 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 			return false;
 		}
 
-		cout << "Result: \n";
-		for (unsigned j = 0; j < batchSize; j++){
-			for (unsigned k = 0; k < lastLayerSize; k++){
-				cout << result.at(j*lastLayerSize + k) << ' ';
+		unsigned nrofDims = this->outputTensors.at(i).dims.nbDims;
+		//2D: batchsize x K
+		if (nrofDims == 2) { 
+			unsigned K = this->outputTensors.at(i).dims.d[1];
+			for (unsigned k = 0; k < batchSize; k++){
+		    	for (unsigned n = 0; n < K; n++){
+		    		cout << result.at(k*K + n) << " ";
+				}
+				cout << endl;
+			}
+		}
+		// 3D: batchsize x L x K
+		else if (nrofDims == 3) { 
+			unsigned L = this->outputTensors.at(i).dims.d[1];
+			unsigned K =  this->outputTensors.at(i).dims.d[2];
+			for (unsigned l = 0; l < batchSize; l++){
+				for (unsigned k = 0; k < L; k++){
+					for (unsigned n = 0; n < K; n++){
+						cout << result.at(l*(K*L) +  k*K + n) << " ";
+			 		}
+			 		cout << endl;
+				}
+				cout << endl;
+			}
+		}
+		// 4D: batchsize x M x L x K
+		else if (nrofDims == 4) { 
+			unsigned M = this->outputTensors.at(i).dims.d[1];
+			unsigned L =  this->outputTensors.at(i).dims.d[2];
+			unsigned K = this->outputTensors.at(i).dims.d[3];
+			for (unsigned m = 0; m < batchSize; m++) {
+				for (unsigned l = 0; l < M; l++) {
+					for (unsigned k = 0; k < L; k++){
+			    		for (unsigned n = 0; n < K; n++) {
+			    			cout << result.at(m*(M*L*M) + l*(K*L) + k*K + n) << " ";
+			    		}
+			    		cout << endl;
+			 		}
+			 		cout << endl;
+				}
+				cout << endl;
+			}
+		}
+		else{
+			for (unsigned j = 0; j < result.size(); j++){
+				cout <<result.at(j) << " ";
 			}
 			cout << endl;
 		}
+		result.clear();
 	}
 
 	//Deallocate memory to avoid memory leak
