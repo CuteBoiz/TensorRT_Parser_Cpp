@@ -2,7 +2,7 @@
 Ultitities for convert and infer tensorrt engine.
 
 author: phatnt.
-modified date: 2021-10-11
+modified date: 2021-10-15
  */
 
 #ifndef _UTILS_HPP_
@@ -25,29 +25,6 @@ modified date: 2021-10-11
 
 using namespace std;
 
-inline bool CudaCheck(cudaError_t status){                                                                       
-    if (status != cudaSuccess){                                                   
-        cout << "[ERROR] [CUDA Failure] " << cudaGetErrorString(status) 
-             << " in file "<< __FILE__                                  
-             << " at line " << __LINE__ << endl;                        
-        return false;                                                    
-    }
-    return true;                                                   
-}
-
-struct ExportConfig{
-    string onnxEnginePath;
-    unsigned maxBatchsize;
-    size_t maxWorkspaceSize;
-    bool useFP16;
-    bool useDynamicShape;
-    string inputTensorName;
-    vector<unsigned> tensorDims;
-
-    ExportConfig();
-    bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16);
-    bool Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16, const string tensorName, const vector<unsigned> dims);
-};
 
 struct Tensor{
     string tensorName;
@@ -61,7 +38,21 @@ struct Tensor{
     Tensor(nvinfer1::ICudaEngine* engine, const unsigned bindingIndex);
 };
 
-static ostream& operator << (ostream& os, const Tensor& x);
+struct ExportConfig{
+    string onnxEnginePath;
+    unsigned maxBatchsize;
+    size_t maxWorkspaceSize;
+    bool useFP16;
+    bool useDynamicShape;
+    vector<string> tensorNames;
+    vector<vector<unsigned>> tensorDims;
+
+    ExportConfig();
+    bool Update(const string onnxEnginePath, const unsigned maxBatchsize, const size_t maxWorkspaceSize, const bool fp16);
+    bool Update(const string onnxEnginePath, const unsigned maxBatchsize, const size_t maxWorkspaceSize, const bool fp16, vector<string> tensorNames, vector<vector<unsigned>> tensorDims);
+};
+
+
 
 struct TRTDestroy{
     template< class T >
@@ -84,6 +75,31 @@ public:
     }
 } gLogger;
 
+
+vector<string> splitString(string s, string delimiter);
+/*
+Split string
+Args:
+    s: a string
+    delimiter: splited char
+Return:
+    vector<string>: splited string.
+ */
+ 
+
+inline bool CudaCheck(cudaError_t status);
+/*
+Check cudaStatus while using a Cuda command.
+Args:
+    status: cuda status when using a cuda command.
+Return:
+    <bool> success checking.
+ */
+
+static ostream& operator << (ostream& os, const Tensor& x);
+/*
+Print operator for struct Tensor.
+ */
 
 bool CheckFileIfExist(const string filePath);
 /*

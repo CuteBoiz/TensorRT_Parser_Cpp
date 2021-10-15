@@ -34,15 +34,14 @@ make
 
 ## III. Export Onnx model to TensorRT model (.trt).
 ```sh
-./main export --weight (--maxbatchsize) (--fp16) (--workspace) (--tensor) (--dims) (--gpu)
+./main export --weight (--maxbatchsize) (--fp16) (--workspace) (--tensor) (--gpu)
 ```
 - Arguments:
     - `--weight` `string`: path to onnx engine `required`.
     - `--fp16` `store_true`: use FP16 fast mode (x2 inference time) **default=false**.
     - `--maxbatchsize` `int`:  inference max batchsize **default=1**.
     - `--workspace` `int`: max workspace size **default=1300 MB**.
-    - `--tensor` `string`: input tensor's name ***(dynamic shape input only)***.
-    - `--dims` `array(int)`: input tensor's dimension ***(dynamic shape input only)***. 
+    - `--tensor` `string_array`: name,dims1(,dims2,...) (name,dims1,..) Input tensor(s) for dynamic shape input ***(dynamic shape input only)***.
     - `--gpu` `int` : gpu number **(default=0)**.
 
    **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.

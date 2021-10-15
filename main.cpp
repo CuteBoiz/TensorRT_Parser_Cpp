@@ -78,7 +78,7 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 		<bool> Success checking.
 	 */
 	vector<string> required_args = {"--weight"};
-	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--dims", "--gpu"};
+	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--gpu"};
 	
 	vector<string> arguments = {};
 	string enginePath = "";
@@ -86,8 +86,8 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 	size_t workspaceSize = DEFAULT_MAX_WORKSPACE_SIZE;
 	unsigned maxBatchSize = DEFAULT_MAX_BATCHSIZE;
 	bool useDynamicShape = false;
-	string inputTensorName = "";
-	vector<unsigned> tensorDims = {};
+	vector<string> tensorNames = {};
+	vector<vector<unsigned>> tensorDims = {};
 	
 	//Get Arguments from argv and Check condition for required args.
 	for (unsigned i = 2; i < argc; i++) {
@@ -121,24 +121,28 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 			}
 			else if (arguments.at(i) == "--tensor") {
 				useDynamicShape = true;
-				inputTensorName = GetArgumentsValue(argc, argv, argsIndex, "string");
-			}
-			else if (arguments.at(i) == "--dims") {
-				useDynamicShape = true;
-				if (argsIndex + 4 >= argc) {
-					cerr << "[ERROR] Not enough values for [--dims]! \n";
-					return false;
+				string tensorString  = GetArgumentsValue(argc, argv, argsIndex, "array");
+				vector<string> tensors = splitString(tensorString, "/");
+				for (string& tensor : tensors){
+					vector<string> ele = splitString(tensor, ",");
+					if (ele.size() < 2){
+						cerr << "[ERROR] Non dims value for '--tensor':[" << ele.at(0) << "] !\n";
+						return false;
+					}
+					tensorNames.emplace_back(ele.at(0));
+					vector<unsigned> dim;
+					for (unsigned i = 1; i < ele.size(); i++){
+						try {
+							dim.emplace_back(stoi(ele.at(i)));
+						}
+						catch (exception &err) {
+							cerr << "[ERROR] Invalid dims value for '--tensor':" << ele.at(i) << "!\n";
+							return false;
+						}
+					}
+					tensorDims.emplace_back(dim);
 				}
-				try {
-					tensorDims.emplace_back(stoi(argv[argsIndex+2]));
-					tensorDims.emplace_back(stoi(argv[argsIndex+3]));
-					tensorDims.emplace_back(stoi(argv[argsIndex+4]));
-				}
-				catch (exception &err) {
-					cerr << "[ERROR] Invalid value for '--dims': " << argv[argsIndex+2] << " " << argv[argsIndex+3] << " " << argv[argsIndex+4] << ". Value must be unsigned interger array!\n";
-					return false;
-				}
-				argsIndex += 4;
+				
 			}
 			else if (arguments.at(i) == "--gpu") {
 				unsigned gpuNum = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
@@ -165,7 +169,7 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 		return config.Update(enginePath, maxBatchSize, workspaceSize, useFP16);
 	}
 	else {
-		return config.Update(enginePath, maxBatchSize, workspaceSize, useFP16, inputTensorName, tensorDims);
+		return config.Update(enginePath, maxBatchSize, workspaceSize, useFP16, tensorNames, tensorDims);
 	}
 }
 

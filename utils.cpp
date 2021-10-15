@@ -1,6 +1,32 @@
 #include "utils.h"
 using namespace nvinfer1;
 
+
+vector<string> splitString(string s, string delimiter){
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    string token;
+    vector<string> res;
+
+    while ((pos_end = s.find (delimiter, pos_start)) != string::npos) {
+        token = s.substr (pos_start, pos_end - pos_start);
+        pos_start = pos_end + delim_len;
+        res.push_back (token);
+    }
+    res.push_back (s.substr (pos_start));
+    return res;
+}
+
+
+bool CudaCheck(cudaError_t status){                                                                       
+    if (status != cudaSuccess){                                                   
+        cout << "[ERROR] [CUDA Failure] " << cudaGetErrorString(status) 
+             << " in file "<< __FILE__                                  
+             << " at line " << __LINE__ << endl;                        
+        return false;                                                    
+    }
+    return true;                                                   
+}
+
 bool CheckFileIfExist(const string filePath) {
 	ifstream f(filePath, ios::binary);
 	if (!f.good()) {
@@ -134,7 +160,7 @@ string GetArgumentsValue(const int argc, char** argv, unsigned& argsIndex, const
         }
     } 
     else if (type == "int") {
-        try  {
+        try {
            stoi(value);
         }
         catch (exception &err) {
@@ -142,11 +168,17 @@ string GetArgumentsValue(const int argc, char** argv, unsigned& argsIndex, const
         }
     } 
     else if (type == "float") {
-        try  {
+        try {
            stod(value);
         }
         catch (exception &err) {
             throw std::invalid_argument("[ERROR]: Could not cast '" + value + "' to float!\n");
+        }
+    }
+    else if (type == "array") {
+        while ((argsIndex+1) < argc && string(argv[argsIndex+1]).rfind("--") == -1){
+            argsIndex++;
+            value += ("/" + string(argv[argsIndex]));
         }
     } 
     else {
@@ -157,112 +189,121 @@ string GetArgumentsValue(const int argc, char** argv, unsigned& argsIndex, const
 
 
 ExportConfig::ExportConfig(){
-    onnxEnginePath = "";
-    maxBatchsize = 0;
-    maxWorkspaceSize = 0;
-    useFP16 = false;
-    useDynamicShape = false;
-    inputTensorName = "";
-    tensorDims = {};
+    this->onnxEnginePath = "";
+    this->maxBatchsize = 0;
+    this->maxWorkspaceSize = 0;
+    this->useFP16 = false;
+    this->useDynamicShape = false;
+    this->tensorNames = {};
+    this->tensorDims = {};
 }
 
-bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16){
-    onnxEnginePath = enginePath;
-    maxBatchsize = i_maxbatchsize;
-    maxWorkspaceSize = workspaceSize;
-    useFP16 = fp16;
-    useDynamicShape = false;
-    inputTensorName = "";
-    tensorDims = {};
+bool ExportConfig::Update(const string onnxEnginePath, const unsigned maxBatchsize, const size_t maxWorkspaceSize, const bool fp16){
+    this->onnxEnginePath = onnxEnginePath;
+    this->maxBatchsize = maxBatchsize;
+    this->maxWorkspaceSize = maxWorkspaceSize;
+    this->useFP16 = fp16;
+    this->useDynamicShape = false;
+    this->tensorNames = {};
+    this->tensorDims = {};
     if (maxBatchsize <= 0){
         cerr <<"[ERROR] Max batchsize must be more than 0! \n";
         return false;
     }
-    if (!CheckFileIfExist(onnxEnginePath)){
-        cerr <<"[ERROR] '"<< onnxEnginePath << "' not found! \n";
+    if (!CheckFileIfExist(this->onnxEnginePath)){
+        cerr <<"[ERROR] '"<< this->onnxEnginePath << "' not found! \n";
         return false;
     }
     size_t totalDevMem, freeDevMem;
     if (!CudaCheck(cudaMemGetInfo(&freeDevMem, &totalDevMem))) return false;
-    if (maxWorkspaceSize > freeDevMem) {
-        cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << maxWorkspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
+    if (this->maxWorkspaceSize > freeDevMem) {
+        cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << this->maxWorkspaceSize/1048576 << "MB. Free memory left: " 
+             << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
         return false;
     }
     return true;
 }
 
-bool ExportConfig::Update(const string enginePath, const unsigned i_maxbatchsize, const size_t workspaceSize, const bool fp16, const string tensorName, const vector<unsigned> dims){
-    onnxEnginePath = enginePath;
-    maxBatchsize = i_maxbatchsize;
-    maxWorkspaceSize = workspaceSize;
-    useFP16 = fp16;
-    useDynamicShape = true;
-    inputTensorName = tensorName;
-    for (unsigned i = 0; i < dims.size(); i++){
-        tensorDims.emplace_back(dims.at(i));
-    }
-    if (maxBatchsize <= 0){
+bool ExportConfig::Update(const string onnxEnginePath, const unsigned maxBatchsize, const size_t maxWorkspaceSize, const bool fp16, vector<string> tensorNames, vector<vector<unsigned>> tensorDims){   
+    this->onnxEnginePath = onnxEnginePath;
+    this->maxBatchsize = maxBatchsize;
+    this->maxWorkspaceSize = maxWorkspaceSize;
+    this->useFP16 = fp16;
+    this->useDynamicShape = true;
+    this->tensorNames = tensorNames;
+    this->tensorDims = tensorDims;
+
+    if (this->maxBatchsize <= 0){
         cerr <<"[ERROR] Max batchsize must be more than 0! \n";
         return false;
     }
-    if (!CheckFileIfExist(onnxEnginePath)){
-        cerr <<"[ERROR] '"<< onnxEnginePath << "' not found! \n";
+    if (!CheckFileIfExist(this->onnxEnginePath)){
+        cerr <<"[ERROR] '"<< this->onnxEnginePath << "' not found! \n";
         return false;
     }
     size_t totalDevMem, freeDevMem;
     if (!CudaCheck(cudaMemGetInfo(&freeDevMem, &totalDevMem))) return false;
-    if (maxWorkspaceSize > freeDevMem) {
-        cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << maxWorkspaceSize/1048576 << "MB. Free memory left: " << freeDevMem/1048576 <<"MB. \nTry decreasing workspacesize to continue.\n";
+    if (this->maxWorkspaceSize > freeDevMem) {
+        cerr << "[ERROR] Not enough Gpu Memory! Model's WorkspaceSize: " << this->maxWorkspaceSize/1048576 << "MB. Free memory left: " 
+             << freeDevMem/1048576 << "MB. \nTry decreasing workspacesize to continue.\n";
         return false;
     }
-    if (inputTensorName == ""){
-        cerr << "[ERROR] Input tensor name is empty! \n";
+    if (this->tensorNames.size() != this->tensorDims.size()){
+        cerr << "[ERROR] UnMatched size between tensorNames and tensorDims!\n";
         return false;
     }
-    if (tensorDims.size() != 3){
-        cerr << "[ERROR] Dimension of dynamic shape must be 3! \n";
-        return false;
+    for (auto& tensorName : this->tensorNames){
+        if (tensorName == ""){
+            cerr << "[ERROR] Input tensor name is empty! \n";
+            return false;
+        }
+    }
+    for (auto& tensorDim : this->tensorDims){
+        if (tensorDims.size() < 1 || tensorDims.size() > 3){
+            cerr << "[ERROR] Dimension of tensorDims must >= 1 and <= 3! \n";
+            return false;
+        }
     }
     return true;
 }
 
 Tensor::Tensor(){
-	throw std::invalid_argument("[ERROR] Un-Initialize tensor!\n");
+	throw ("[ERROR] Un-Initialize tensor!\n");
 	abort();
 }
 
 Tensor::Tensor(nvinfer1::ICudaEngine* engine, const unsigned bindingIndex){
     if (bindingIndex >= engine->getNbBindings()){
-        throw std::invalid_argument("[ERROR] bindingIndex is more than engine's binding index");
+        throw ("[ERROR] bindingIndex is more than engine's binding index");
         abort();
     }
-    tensorName = engine->getBindingName(bindingIndex);
-    dims = engine->getBindingDimensions(bindingIndex);
-    type = engine->getBindingDataType(bindingIndex);
-    format = engine->getBindingFormat(bindingIndex);
+    this->tensorName = engine->getBindingName(bindingIndex);
+    this->dims = engine->getBindingDimensions(bindingIndex);
+    this->type = engine->getBindingDataType(bindingIndex);
+    this->format = engine->getBindingFormat(bindingIndex);
 
-    if (type == nvinfer1::DataType::kFLOAT) {
-        tensorSize = sizeof(float);
+    if (this->type == nvinfer1::DataType::kFLOAT) {
+        this->tensorSize = sizeof(float);
     }
-    else if (type == nvinfer1::DataType::kHALF) {
-        tensorSize = sizeof(float)/2;
+    else if (this->type == nvinfer1::DataType::kHALF) {
+        this->tensorSize = sizeof(float)/2;
     }
-    else if (type == nvinfer1::DataType::kINT8) {
-        tensorSize = sizeof(int8_t);
+    else if (this->type == nvinfer1::DataType::kINT8) {
+        this->tensorSize = sizeof(int8_t);
     }
-    else if (type == nvinfer1::DataType::kINT32) {
-        tensorSize = sizeof(int32_t);
+    else if (this->type == nvinfer1::DataType::kINT32) {
+        this->tensorSize = sizeof(int32_t);
     }
-    else if (type == nvinfer1::DataType::kBOOL) {
-        tensorSize = sizeof(bool);
+    else if (this->type == nvinfer1::DataType::kBOOL) {
+        this->tensorSize = sizeof(bool);
     }
 
-    if (format == TensorFormat::kLINEAR || format == TensorFormat::kCHW2 || format == TensorFormat::kCHW4 || format == TensorFormat::kCHW16 
-        || format == TensorFormat::kCHW32|| format ==  TensorFormat::kCDHW32|| format == TensorFormat::kDLA_LINEAR){
-        isCHW = true;
+    if (this->format == TensorFormat::kLINEAR || this->format == TensorFormat::kCHW2 || this->format == TensorFormat::kCHW4 || this->format == TensorFormat::kCHW16 
+        || this->format == TensorFormat::kCHW32|| this->format ==  TensorFormat::kCDHW32|| this->format == TensorFormat::kDLA_LINEAR){
+        this->isCHW = true;
     }
-    else if (format == TensorFormat::kHWC8 || format == TensorFormat::kDHWC8 || format == TensorFormat::kHWC || format == TensorFormat::kDLA_HWC4){
-        isCHW = false;
+    else if (this->format == TensorFormat::kHWC8 || this->format == TensorFormat::kDHWC8 || this->format == TensorFormat::kHWC || this->format == TensorFormat::kDLA_HWC4){
+        this->isCHW = false;
     }
     else{
         throw ("[ERROR] Unsupported TensorFormat! Check TensorRT Document 'TensorFormat' to add new format!\n");
@@ -397,17 +438,33 @@ nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {
 	config->setMaxWorkspaceSize(maxWorkspaceSize);
 	builder->setMaxBatchSize(maxBatchsize);
 	if (useDynamicShape){
-		string inputTensorName = exportConfig.inputTensorName;
-		vector<unsigned> tensorDims = exportConfig.tensorDims;
-		cout << "\t - Input tensor: '" << inputTensorName << "': BactchSize ";
-		for (unsigned i = 0; i < tensorDims.size(); i++) {
-			cout << tensorDims.at(i) << " ";
-		}
-		cout << endl;
-		auto profile = builder->createOptimizationProfile();
-		profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
-		profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{max(int(maxBatchsize/2),1), tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
-		profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{maxBatchsize, tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
+        auto profile = builder->createOptimizationProfile();
+        for (unsigned i = 0; i < exportConfig.tensorNames.size(); i++){
+            string inputTensorName = exportConfig.tensorNames.at(i);
+            vector<unsigned> tensorDims = exportConfig.tensorDims.at(i);
+            
+            cout << "\t - Input tensor: '" << inputTensorName << "': BactchSize";
+            for (unsigned i = 0; i < tensorDims.size(); i++){
+                cout <<" x " << tensorDims.at(i);
+            }
+            cout << endl;
+            
+            if (tensorDims.size() == 1){
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims2{1, tensorDims.at(0)});
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims2{max(int(maxBatchsize/2),1), tensorDims.at(0)});
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims2{maxBatchsize, tensorDims.at(0)});
+            }
+            else if (tensorDims.size() == 2){
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims3{1, tensorDims.at(0), tensorDims.at(1)});
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims3{max(int(maxBatchsize/2),1), tensorDims.at(0), tensorDims.at(1)});
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims3{maxBatchsize, tensorDims.at(0), tensorDims.at(1)});
+            }
+            else if (tensorDims.size() == 3){
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMIN, nvinfer1::Dims4{1, tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4{max(int(maxBatchsize/2),1), tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
+                profile->setDimensions(inputTensorName.c_str(), nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4{maxBatchsize, tensorDims.at(0), tensorDims.at(1), tensorDims.at(2)});
+            }
+        }
 		config->addOptimizationProfile(profile);
 	}
 	if (useFP16){
