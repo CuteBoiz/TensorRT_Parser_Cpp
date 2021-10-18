@@ -37,38 +37,6 @@ bool CheckFileIfExist(const string filePath) {
 	return true;
 }
 
-bool CheckFolderIfExist(const string folderPath){
-    bool result = false;
-    DIR *dir = opendir(folderPath.c_str());
-    if (dir) {
-        result =  true;
-    }
-    else if (ENOENT == errno) {
-        result = false;
-    } 
-    else {
-        result = false;
-    }
-    closedir(dir);
-    return result;
-}
-
-bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names) {
-    DIR *p_dir = opendir(p_dir_name);
-    if (p_dir == nullptr) {
-        return false;
-    }
-    struct dirent* p_file = nullptr;
-    while ((p_file = readdir(p_dir)) != nullptr) {
-        if (strcmp(p_file->d_name, ".") != 0 &&
-            strcmp(p_file->d_name, "..") != 0) {
-            string cur_file_name(p_file->d_name);
-            file_names.push_back(cur_file_name);
-        }
-    }
-    closedir(p_dir);
-    return true;
-}
 
 bool SetPrimaryCudaDevice(const unsigned gpuNum){
     int deviceCount = 0;
@@ -164,11 +132,6 @@ string GetArgumentsValue(const int argc, char** argv, unsigned& argsIndex, const
             throw std::invalid_argument("[ERROR]: '" + value + "' does not exist! \n");
         }
     }
-    else if (type == "folder") {
-        if (!CheckFolderIfExist(value.c_str())){
-            throw std::invalid_argument("[ERROR]: Folder '" + value + "' does not exist or Could not open! \n");
-        }
-    } 
     else if (type == "int") {
         try {
            stoi(value);
@@ -380,97 +343,6 @@ ostream& operator << (ostream& os, const Tensor& x) {
     }
 
     return os;
-}
-
-vector< vector< cv::Mat >> PrepareImageBatch(string dataPath, const unsigned batchSize){
-    vector< cv::Mat> images;
-    vector< vector < cv::Mat>> batchedImages;
-    if (CheckFileIfExist(dataPath)){
-        string fileExtension = dataPath.substr(dataPath.find_last_of(".") + 1);
-        if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg"){
-            cv::Mat image = cv::imread(dataPath);
-            images.emplace_back(image);
-            batchedImages.emplace_back(images);
-            images.clear();
-        }
-        else if (fileExtension == "mp4" || fileExtension == "mov" || fileExtension == "avi" || fileExtension == "wmv" || fileExtension == "flv"){
-            cv::VideoCapture cap(dataPath);
-            if(!cap.isOpened()){
-                throw std::invalid_argument("Error opening video stream or file");
-            }
-            else{
-                while (1) {
-                    cv::Mat frame;
-                    cap >> frame;
-
-                    if (!frame.empty()){
-                        images.emplace_back(frame);
-                        if (images.size() == batchSize){
-                            batchedImages.emplace_back(images);
-                            images.clear();
-                        }
-                        else {
-                            continue;
-                        }
-                    }
-                    else{
-                        if (images.size() != 0){
-                            batchedImages.emplace_back(images);
-                            images.clear();
-                        }
-                        break;
-                    }           
-                }
-            }
-        }
-        else{
-            throw std::invalid_argument("[ERROR] Unsupported Extension: '" + dataPath + "'!\n");
-            abort();
-        }
-    }
-    else{
-        if (CheckFolderIfExist(dataPath)){
-             //Get images form folder
-            vector< string> fileNames;
-            if (dataPath[dataPath.length() - 1] != '/' && dataPath[dataPath.length() -1] != '\\') {
-                dataPath = dataPath + '/';
-            }
-            if (ReadFilesInDir(dataPath.c_str(), fileNames)) {
-                cout << "[INFO] Load data from '" << dataPath << "' success! Total " << fileNames.size() << " files. \n";
-            }
-            else{
-                throw std::invalid_argument("[ERROR] Could not read files from '" + dataPath + "'!\n");
-                abort();
-            }
-            unsigned i = 0;
-            for (unsigned f = 0; f < fileNames.size(); f += i) {
-                //Prepare inference batch
-                unsigned batchIndex = 0;
-                for (i = 0; batchIndex < batchSize && (f + i) < fileNames.size(); i++) {
-                    string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
-                    if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
-                        cout << fileNames[f + i] << endl;
-                        cv::Mat image = cv::imread(dataPath + fileNames[f + i]);
-                        images.emplace_back(image);
-                        batchIndex++;
-                    }
-                    else{
-                        cout << "[WARNING] '" << fileNames[f + i] << "' not an image! \n";
-                    }
-                }
-                if (images.size() == 0) {
-                    continue; //Skip if got a non-image files stack.
-                }
-                batchedImages.emplace_back(images);
-                images.clear();
-            }
-        }
-        else{
-            throw std::invalid_argument("[ERROR] Could not get data from '" + dataPath + "'!\n");
-            abort();
-        }
-    }
-    return batchedImages;
 }
 
 nvinfer1::ICudaEngine* LoadOnnxEngine(const ExportConfig exportConfig) {

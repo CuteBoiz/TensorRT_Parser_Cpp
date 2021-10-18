@@ -8,7 +8,6 @@ Date modified: 2021-10-07
 #include <iostream>
 #include <chrono>
 #include "utils.h"
-#include "TRTParser.h"
 using namespace std;
 
 #define DEFAULT_MAX_WORKSPACE_SIZE (1048576 * 1300)
@@ -42,14 +41,6 @@ int main(int argc,char** argv) {
 		}
 		cout << "[INFO] Export Successed! \n";
 		return 0;
-	}
-
-	else if (string(argv[1]) == "infer") {
-		if (TRT_Inference(argc, argv)) {
-			cout << "[INFO] Inference Successed! Done!\n";
-			return 0;
-		}
-		return -1;
 	}
 	else {
 		cout << "[ERROR] Undefined Mode: '" << string(argv[1]) << "'. \n\n";
@@ -171,111 +162,4 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 	else {
 		return config.Update(enginePath, maxBatchSize, workspaceSize, useFP16, tensorNames, tensorDims);
 	}
-}
-
-
-bool TRT_Inference(int argc, char **argv) {
-	/*
-	TensorRT Engine Inference.
-	Args:
-		--weight <string>		: path to tensorrt engine.
-		--data <string>			: path to inference images's folder.
-		--batchSize <unsigned>	: infernce batchsize (must smaller than max batchsize of trt engine)
-		--softmax <bool>		: add softmax to last layer of engine.
-	Return:
-		<bool>: Success checking.
-	 */
-	vector<string> required_args = {"--weight", "--data"};
-	vector<string> non_req_args = {"--batchsize", "--softmax", "--gpu"};
-
-	unsigned argsIndex = 1;
-	vector<string> arguments = {};
-	string enginePath = "";
-	string dataPath = "";
-	unsigned batchsize = DEFAULT_INFER_BATCHSIZE;
-	bool useSofmax = DEFAULT_USE_SOFTMAX;
-
-	for (unsigned i = 2; i < argc; i++){
-		if (string(argv[i]).rfind("--") != -1){
-			arguments.emplace_back(string(argv[i]));
-		}
-	}
-	if (!CheckRequiredArguments(required_args, arguments)) return false;
-
-	try{
-		for (unsigned i = 0; i < arguments.size(); i++) {
-			//Check next argument vailable
-			if (argsIndex + 1 <= argc){
-				if (!CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
-			}
-			//Get value from arguments
-			if (arguments.at(i) == "--weight"){
-				enginePath = GetArgumentsValue(argc, argv, argsIndex, "file");
-			}
-			else if (arguments.at(i) == "--data"){
-				dataPath = GetArgumentsValue(argc, argv, argsIndex, "string");
-			}
-			else if (arguments.at(i) == "--batchsize") {
-				batchsize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
-			}
-			else if (arguments.at(i) == "--softmax"){
-				GetArgumentsValue(argc, argv, argsIndex, "store_true");
-				useSofmax = true;
-			}
-			else if (arguments.at(i) == "--gpu") {
-				unsigned gpuNum = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
-				if (!SetPrimaryCudaDevice(gpuNum)){
-					cout << "[ERROR] switch primary CUDA device failed!\n";
-					return false;
-				}
-			}
-			else{
-				cerr << "[ERROR] Invalid arguments :[" << arguments.at(i) << "]. \n";
-				return false;
-			}
-		}
-		//Check next argument existance
-		if (argsIndex < argc-1 && !CheckValidArgument(required_args, non_req_args, string(argv[argsIndex+1]))) return false;
-	}
-	catch (exception& err) {
-		cerr << err.what();
-		return false; 
-	}
-	
-
-	TRTParser engine;
-	unsigned nrofInferIamges = 0;
-	vector< vector< cv::Mat >> batchedImages;
-	
- 	//Initialize engine
-	if (engine.Init(enginePath)){
-		cout << "[INFO] Load '" << enginePath << "' success!. Inferencing... \n";
-	}
-	else{
-		cerr << "[ERROR] Could not parse tensorRT engine! \n";
-		return false;
-	}
-
-	//Prepare data
-	try {
-		batchedImages = PrepareImageBatch(dataPath, batchsize);
-	}
-	catch (exception& err){
-		cerr << err.what();
-		return false; 
-	}
-    
-    for (unsigned i = 0; i < batchedImages.size(); i++){
-    	auto start = chrono::system_clock::now();
-		if (!engine.Inference(batchedImages.at(i), useSofmax)){
-			cerr << "[ERROR] Inference error! \n";
-			return false;
-		}
-		auto end = chrono::system_clock::now();
-		cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
-		nrofInferIamges += batchedImages.at(i).size();
-    }
-	cout << "[INFO] Total inferenced images: " << nrofInferIamges << endl;
-	batchedImages.clear();
-	return true;
 }

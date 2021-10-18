@@ -8,7 +8,6 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
 ## <div align=center> I. Prerequiste. </div>
 
 - [Install Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)
-- [OpenCV with CUDA support (C++/Python)](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)
 
 - Clone and set path.
   ```sh
@@ -66,60 +65,3 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
  
 </details>
 
-## <div align=center> III. TensorRT engine Inference. </div>
-```sh
-./main infer --weight --data (--batchsize) (--softmax) (--gpu)
-```
-<details> 
-<summary><b>Arguments Details</b></summary>
-    
-|Arguments      |Type           |Default    |Note
-|---            |---            |---        |---
-|`--weight`     |`string`       |`required` |**Path to tensorrt engine.**
-|`--data`       |`string`       |`required` |**Path to inference image/video/images's folder.**
-| `--batchsize` |`int`          |`1`        |**Inference batchsize.**
-| `--softmax`   |`store_true`   |`false`    |**Add softmax to last layer of engine.**
-| `--gpu`       |`int`          |`0`        |**Primary gpu index.**
- 
-</details> 
-    
-<details> 
-<summary><b>Examples</b></summary>
- 
-- **TensorRT engine Inference.**
- 
-  ```sh
-  ./main infer --weight classifier.trt --data image.jpg --softmax
-  ./main infer --weight classifier.trt --data ./images/ --batchsize 4
-  ./main infer --weight classifier.trt --data video.mov --batchsize 3 --softmax
-  ```
- 
-- **Multiple inputs engine inference**
- 
-  ```sh
-    Edit 'Inference' function (Class TRTParser(TRTParser.h and TRTParser.cpp)):
-       - Add 2nd input's data arguments.
-       - Add AllocateImageInput or AllocateNonImageInput for buffer[1](input2) below 'AllocateImageInput' (buffer[0](input1)).
-       - Remove 'nrofInputs > 1' condition
-    Edit main.cpp 
-       - Add 2nd input's data to engine.Inference(...) coresponding with above edition. 
-   
-   ./main infer --weight classifier.trt --data ./infer_images/ --batchsize 3 --softmax
-   ```
-
-</details>
- 
-## To-Do
-
-- [x] Multiple inputs model.
-- [x] Multiple outputs model.
-- [x] Add Channel last image allocate.
-- [x] Switch Primary GPU. 
-- [x] Multi-type cast for arguments (Easy to maintain).
-- [x] Non-image input model.
-- [x] Add examples.
-- [x] 2D,3D tensor sofmax execute.
-- [x] Remove "Segmentation fault (core dumped)" at ending of inference.
-- [x] CUDA allocate exception handle.
-- [x] Support INT model.
-- [ ] Add CudaStream.
