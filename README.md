@@ -29,15 +29,22 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
 ```sh
 ./main export --weight (--maxbatchsize) (--fp16) (--maxworkspace) (--tensor) (--gpu)
 ```
-- **Arguments:**
-    - `--weight` `string`: path to onnx engine `required`.
-    - `--fp16` `store_true`: use FP16 fast mode (x2 inference time) **default=false**.
-    - `--maxbatchsize` `int`:  inference max batchsize **default=1**.
-    - `--maxworkspace` `int`: max workspace size **default=1300 MB**.
-    - `--tensor` `string_array`: Input tensor(s) for dynamic shape input ***(dynamic shape input only)***.
-    - `--gpu` `int` : gpu number **(default=0)**.
+<details> 
+<summary><b>Arguments Details</b></summary>
+    
+   |Arguments Details   |Type           |Default        |Note
+   |---                 |---            |---            |---
+   |`--weight`          |`string`       |`required`     |**Path to onnx engine.**
+   |`--fp16`            |`store_true`   |`false`        |**Use FP16 fast mode (x2 inference time).**
+   |`--maxbatchsize`    |`int`          |`1`            |**Inference max batchsize.**
+   |`--maxworkspace`    |`int`          |`1300(MB)`     |**Max workspace size (MB).**
+   |`--tensor`          |`string_array` |`None`         |**Input tensor(s) for dynamic shape input *(dynamic shape input only)*.**
+   |`--gpu`             |`int`          |`0`            |**Primary gpu index.**
 
    **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
+    
+</details> 
+
 <details> 
 <summary><b>Examples</b></summary>
  
@@ -63,13 +70,19 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
 ```sh
 ./main infer --weight --data (--batchsize) (--softmax) (--gpu)
 ```
-- **Arguments:**
-    - `--weight` `string`: path to tensorrt engine `required`.
-    - `--data` `string`: path to inference image/video/images's folder `required`.
-    - `--batchsize` `int`: inference batchsize **default=1**.
-    - `--softmax` `store_true`: add softmax to last layer of engine **default=false**.
-    - `--gpu` `int`: gpu number **(default=0)**.
+<details> 
+<summary><b>Arguments Details</b></summary>
+    
+|Arguments      |Type           |Default    |Note
+|---            |---            |---        |---
+|`--weight`     |`string`       |`required` |**Path to tensorrt engine.**
+|`--data`       |`string`       |`required` |**Path to inference image/video/images's folder.**
+| `--batchsize` |`int`          |`1`        |**Inference batchsize.**
+| `--softmax`   |`store_true`   |`false`    |**Add softmax to last layer of engine.**
+| `--gpu`       |`int`          |`0`        |**Primary gpu index.**
  
+</details> 
+    
 <details> 
 <summary><b>Examples</b></summary>
  
