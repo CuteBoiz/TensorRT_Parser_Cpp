@@ -6,8 +6,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 #Cuda
-include_directories(/usr/local/cuda-11.1/include)
-link_directories(/usr/local/cuda-11.1/lib64)
+include_directories(/usr/local/cuda/include)
+link_directories(/usr/local/cuda/lib64)
 
 #TensorRT
 include_directories(/home/phatnt/TensorRT-7/include)
