@@ -59,7 +59,7 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
  
 </details>
 
-## <div align=center> IV. TensorRT engine Inference. </div>
+## <div align=center> III. TensorRT engine Inference. </div>
 ```sh
 ./main infer --weight --data (--batchsize) (--softmax) (--gpu)
 ```
@@ -96,7 +96,7 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
 
 </details>
  
-## VI. TO-DO
+## To-Do
 
 - [x] Multiple inputs model.
 - [x] Multiple outputs model.
