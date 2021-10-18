@@ -78,7 +78,7 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 		<bool> Success checking.
 	 */
 	vector<string> required_args = {"--weight"};
-	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--workspace", "--tensor", "--gpu"};
+	vector<string> non_req_args = {"--fp16", "--maxbatchsize", "--maxworkspace", "--tensor", "--gpu"};
 	
 	vector<string> arguments = {};
 	string enginePath = "";
@@ -116,7 +116,7 @@ bool GetExportConfig(int argc, char ** argv, ExportConfig& config) {
 			else if (arguments.at(i) == "--maxbatchsize") {
 				maxBatchSize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));
 			}
-			else if (arguments.at(i) == "--workspace") {
+			else if (arguments.at(i) == "--maxworkspace") {
 				workspaceSize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int")) * 1048576;
 			}
 			else if (arguments.at(i) == "--tensor") {
@@ -213,7 +213,7 @@ bool TRT_Inference(int argc, char **argv) {
 				enginePath = GetArgumentsValue(argc, argv, argsIndex, "file");
 			}
 			else if (arguments.at(i) == "--data"){
-				dataPath = GetArgumentsValue(argc, argv, argsIndex, "folder");
+				dataPath = GetArgumentsValue(argc, argv, argsIndex, "string");
 			}
 			else if (arguments.at(i) == "--batchsize") {
 				batchsize = stoi(GetArgumentsValue(argc, argv, argsIndex, "int"));

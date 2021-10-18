@@ -34,13 +34,13 @@ make
 
 ## III. Export Onnx model to TensorRT model (.trt).
 ```sh
-./main export --weight (--maxbatchsize) (--fp16) (--workspace) (--tensor) (--gpu)
+./main export --weight (--maxbatchsize) (--fp16) (--maxworkspace) (--tensor) (--gpu)
 ```
 - Arguments:
     - `--weight` `string`: path to onnx engine `required`.
     - `--fp16` `store_true`: use FP16 fast mode (x2 inference time) **default=false**.
     - `--maxbatchsize` `int`:  inference max batchsize **default=1**.
-    - `--workspace` `int`: max workspace size **default=1300 MB**.
+    - `--maxworkspace` `int`: max workspace size **default=1300 MB**.
     - `--tensor` `string_array`: name,dims1(,dims2,...) (name,dims1,..) Input tensor(s) for dynamic shape input ***(dynamic shape input only)***.
     - `--gpu` `int` : gpu number **(default=0)**.
 
@@ -52,8 +52,8 @@ make
 ```
 - Arguments:
     - `--weight` `string`: path to tensorrt engine `required`.
-    - `--data` `string`: path to inference images's folder `required`.
-    - `--batchSize` `int`: inference batchsize **default=1**.
+    - `--data` `string`: path to inference image/video/images's folder `required`.
+    - `--batchsize` `int`: inference batchsize **default=1**.
     - `--softmax` `store_true`: add softmax to last layer of engine **default=false**.
     - `--gpu` `int`: gpu number **(default=0)**.
 

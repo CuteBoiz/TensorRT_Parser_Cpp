@@ -110,6 +110,15 @@ Return:
     <bool> exist-true / not exist-false
  */
 
+bool CheckFolderIfExist(const string folderPath);
+/*
+Check existance of a folder.
+Args:
+    filePath: path to folder.
+Return:
+    <bool> exist-true / not exist-false
+ */
+
 bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names);
 /*
 Read all file in a folder.
