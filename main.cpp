@@ -275,7 +275,7 @@ bool TRT_Inference(int argc, char **argv) {
 		cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
 		nrofInferIamges += batchedImages.at(i).size();
     }
-    batchedImages.clear();
 	cout << "[INFO] Total inferenced images: " << nrofInferIamges << endl;
+	batchedImages.clear();
 	return true;
 }

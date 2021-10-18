@@ -10,8 +10,8 @@ TRTParser::TRTParser() {
 TRTParser::~TRTParser() {
 	this->inputTensors.clear();
 	this->outputTensors.clear();
-	this->engine->destroy();
 	this->context->destroy();
+	this->engine->destroy();
 }
 
 size_t TRTParser::GetDimensionSize(const nvinfer1::Dims& dims) {	

@@ -67,7 +67,7 @@ make
 - [x] Non-image input model.
 - [ ] Add examples.
 - [x] 2D,3D tensor sofmax execute.
-- [ ] Remove "Segmentation fault (core dumped)" at ending of inference.
+- [x] Remove "Segmentation fault (core dumped)" at ending of inference.
 - [x] CUDA allocate exception handle.
 - [x] Support INT model.
 - [ ] Add CudaStream.
