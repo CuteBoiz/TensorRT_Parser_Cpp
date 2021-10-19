@@ -1,24 +1,29 @@
 # <div align=center> TensorRT_Parser_Cpp </div>
 
 <div align=center>
- <p><i> The Onnx model can be run on any system with difference platform (Operating system/ CUDA / CuDNN / TensorRT) but take a lot of time to parse.
-Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing time (4-10 min) but can only run on fixed system you've built. </i></p>
+ <p> The Onnx engine can be run on any system with difference platform (Os/Cuda/CuDNN/TensorRT version) but take a lot of time to parse. </p>
+ <p> Convert the Onnx engine to TensorRT engine help you save a lot of parsing time (2-8 min) but can only run on fixed system you've built. </p>
  </div>
 
 ## <div align=center> I. Prerequiste. </div>
 
-- [Install Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)
-- [OpenCV with CUDA support (C++/Python)](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)
+- **[Install Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)**
+- **[OpenCV with CUDA support (C++/Python)](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)**
 
-- Clone and set path.
+- **Clone and set Path for CMakeLists.**
   ```sh
   git clone https://github.com/CuteBoiz/TensorRT_Parser_Cpp
   cd TensorRT_Parser_Cpp
-  gedit CMakeList #Then change my TensorRT path to your TensorRT path(include and lib)
+  gedit CMakeLists.txt #Add your TensorRT installed path (line 13-14) 
   ```
 
-- Move dirent.h file from [Additional files](https://github.com/CuteBoiz/TensorRT_Parser_Cpp/tree/main/Addition%20files) to `Visual-Studio-Installed-Path\201x\Community\VC\Tools\MSVC\14.16.27023\include` **(Visual Studio Only)**
-- Build.
+- **Move dirent.h file from [Additional files](https://github.com/CuteBoiz/TensorRT_Parser_Cpp/tree/main/Addition%20files) *(Visual Studio Only)*.**
+  ```sh
+  Visual-Studio-Installed-Path\201x\Community\VC\Tools\MSVC\14.16.27023\include
+  ````
+  
+  
+- **Build.**
   ```sh
   mkdir build && build
   cmake ..
@@ -110,16 +115,18 @@ Convert the Onnx model to TensorRT model (.trt) help you save a lot of parsing t
 </details>
  
 ## To-Do
+- **Support**
+  - [x] Multiple inputs.
+  - [x] Multiple outputs.
+  - [x] Non-image input.
+  - [x] Channel 1st and last image input (CHW/HWC).
+  - [x] 2D,3D,4D tensor softmax.
+  - [x] kINT/kBOOL/kFLOAT tensor.
+- **Additions**
+  - [x] Switch Primary GPU. 
+  - [x] Examples.
+  - [ ] Add CudaStream (Multiple GPU inference).
+- **Bugs**
+  - [x] Remove "Segmentation fault (core dumped)" at ending of inference.
+  - [x] CUDA allocate exception handle.
 
-- [x] Multiple inputs model.
-- [x] Multiple outputs model.
-- [x] Add Channel last image allocate.
-- [x] Switch Primary GPU. 
-- [x] Multi-type cast for arguments (Easy to maintain).
-- [x] Non-image input model.
-- [x] Add examples.
-- [x] 2D,3D tensor sofmax execute.
-- [x] Remove "Segmentation fault (core dumped)" at ending of inference.
-- [x] CUDA allocate exception handle.
-- [x] Support INT model.
-- [ ] Add CudaStream.
