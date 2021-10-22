@@ -17,11 +17,7 @@ modified date: 2021-10-15
 #include <ostream>
 #include <string.h>
 #include <iostream>
-#include <dirent.h>
 #include <errno.h>
-
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
 
 using namespace std;
 
@@ -110,25 +106,6 @@ Return:
     <bool> exist-true / not exist-false
  */
 
-bool CheckFolderIfExist(const string folderPath);
-/*
-Check existance of a folder.
-Args:
-    filePath: path to folder.
-Return:
-    <bool> exist-true / not exist-false
- */
-
-bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names);
-/*
-Read all file in a folder.
-Args:
-    p_dir_name: path to folder.
-    file_names: returned file's name array.
-Return:
-    <bool> status checking.
- */
-
 bool SetPrimaryCudaDevice(const unsigned gpuNum);
 /*
 Set primary gpu for export or infer.
@@ -197,16 +174,6 @@ Args:
     config: config for onnx parse.
 Return:
     <bool> Success checking.
- */
-
-vector< vector< cv::Mat >> PrepareImageBatch(string folderPath, const unsigned batchSize);
-/*
-Prepare batch for infernces.
-Args:
-    folderPath: path to inference images folder.
-    batchSize:  inference batchsize.
-Return:
-    vector< vector< cv::Mat >> batched images.
  */
 
 #endif

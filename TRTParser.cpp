@@ -1,5 +1,139 @@
 #include "TRTParser.h"
 
+InputData::InputData(cv::Mat image, string imagePath){
+	this->image = image;
+	this->imagePath = imagePath;
+}
+
+bool CheckFolderIfExist(const string folderPath){
+    bool result = false;
+    DIR *dir = opendir(folderPath.c_str());
+    if (dir) {
+        result =  true;
+    }
+    else if (ENOENT == errno) {
+        result = false;
+    } 
+    else {
+        result = false;
+    }
+    closedir(dir);
+    return result;
+}
+
+bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names) {
+    DIR *p_dir = opendir(p_dir_name);
+    if (p_dir == nullptr) {
+        return false;
+    }
+    struct dirent* p_file = nullptr;
+    while ((p_file = readdir(p_dir)) != nullptr) {
+        if (strcmp(p_file->d_name, ".") != 0 &&
+            strcmp(p_file->d_name, "..") != 0) {
+            string cur_file_name(p_file->d_name);
+            file_names.push_back(cur_file_name);
+        }
+    }
+    closedir(p_dir);
+    return true;
+}
+
+
+vector< vector< InputData>> PrepareImageBatch(string dataPath, const unsigned batchSize){
+    vector< InputData> inputDatas;
+    vector< vector < InputData>> batchedData;
+
+    if (CheckFolderIfExist(dataPath)){
+         //Get images form folder
+        vector< string> fileNames;
+        if (dataPath[dataPath.length() - 1] != '/' && dataPath[dataPath.length() -1] != '\\') {
+            dataPath = dataPath + '/';
+        }
+        if (ReadFilesInDir(dataPath.c_str(), fileNames)) {
+            cout << "[INFO] Load data from '" << dataPath << "' success! Total " << fileNames.size() << " files. \n";
+        }
+        else{
+            throw std::invalid_argument("[ERROR] Could not read files from '" + dataPath + "'!\n");
+            abort();
+        }
+        unsigned i = 0;
+        for (unsigned f = 0; f < fileNames.size(); f += i) {
+            //Prepare inference batch
+            unsigned batchIndex = 0;
+            for (i = 0; batchIndex < batchSize && (f + i) < fileNames.size(); i++) {
+                string fileExtension = fileNames[f + i].substr(fileNames[f + i].find_last_of(".") + 1);
+                if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg") {
+                    //cout << fileNames[f + i] << endl;
+                    cv::Mat image = cv::imread(dataPath + fileNames[f + i]);
+                    inputDatas.emplace_back(image, fileNames[f + i]);
+                    batchIndex++;
+                }
+                else{
+                    cout << "[WARNING] '" << fileNames[f + i] << "' not an image! \n";
+                }
+            }
+            if (inputDatas.size() == 0) {
+                continue; //Skip if got a non-image files stack.
+            }
+            batchedData.emplace_back(inputDatas);
+            inputDatas.clear();
+        }
+    }
+    else{
+        if (CheckFileIfExist(dataPath)){
+            string fileExtension = dataPath.substr(dataPath.find_last_of(".") + 1);
+            if (fileExtension == "bmp" || fileExtension == "png" || fileExtension == "jpeg" || fileExtension == "jpg"){
+                cv::Mat image = cv::imread(dataPath);
+                inputDatas.emplace_back(image, dataPath);
+                batchedData.emplace_back(inputDatas);
+                inputDatas.clear();
+            }
+            else if (fileExtension == "mp4" || fileExtension == "mov" || fileExtension == "avi" || fileExtension == "wmv" || fileExtension == "flv"){
+                cv::VideoCapture cap(dataPath);
+                if(!cap.isOpened()){
+                    throw std::invalid_argument("Error opening video stream or file");
+                }
+                else{
+                	unsigned frameCount = 0;
+                    while (1) {
+                        cv::Mat frame;
+                        cap >> frame;
+                        if (!frame.empty()){
+                        	frameCount++;
+                        	size_t pos = dataPath.find_last_of(".");
+                        	string imagePath = dataPath.insert(pos, "_frame_" + to_string(frameCount));
+                            inputDatas.emplace_back(frame, imagePath);
+                            if (inputDatas.size() == batchSize){
+                                batchedData.emplace_back(inputDatas);
+                                inputDatas.clear();
+                            }
+                            else {
+                                continue;
+                            }
+                        }
+                        else{
+                            if (inputDatas.size() != 0){
+                                batchedData.emplace_back(inputDatas);
+                                inputDatas.clear();
+                            }
+                            break;
+                        }           
+                    }
+                }
+            }
+            else{
+                throw std::invalid_argument("[ERROR] Unsupported Extension: '" + dataPath + "'!\n");
+                abort();
+            }
+        }
+        else {
+            throw std::invalid_argument("[ERROR] Folder or File does not exist: '" + dataPath + "'!\n");
+            abort();
+        }
+    }
+    return batchedData;
+}
+
 TRTParser::TRTParser() {
 	this->engineSize = 0;
 	this->maxBatchSize = 0;
@@ -241,19 +375,25 @@ vector<float> TRTParser::PostprocessResult(float *gpuOutputBuffer, const unsigne
 }
 
 
-bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
-	unsigned batchSize = images.size();
+bool TRTParser::Inference(vector<InputData> inputDatas, const bool softMax) {
+	unsigned batchSize = inputDatas.size();
 	unsigned nrofInputs = this->inputTensors.size();
+	vector< cv::Mat> images {};
+
 	if (batchSize > this->maxBatchSize){
 		cerr << "[ERROR] Batch size must be smaller or equal " << this->maxBatchSize << endl;
 		return false;
+	}
+	for (unsigned i = 0; i < inputDatas.size(); i++){
+		images.emplace_back(inputDatas.at(i).image);
+		cout << "[INFO] ImagePath: " << inputDatas.at(i).imagePath << endl;
 	}
 
 	//Create buffer on GPU device
 	vector< void* > buffers(this->engine->getNbBindings());
 	for (unsigned i = 0; i < this->engine->getNbBindings(); i++) {
 		auto dims = this->engine->getBindingDimensions(i);
-		size_t bindingSize;
+		size_t bindingSize = 0;
 		if (this->engine->bindingIsInput(i)){
 			bindingSize = this->GetDimensionSize(dims) * this->inputTensors.at(i).tensorSize;
 		}
@@ -264,7 +404,6 @@ bool TRTParser::Inference(vector<cv::Mat> images, const bool softMax) {
 	}
 
 	//Allocate data to GPU. 
-	//If you have multiple inputs add AllocateImageInput or AllocateNonImageInput with coresponding inputIndex
 	if (!this->AllocateImageInput(images, (float*)buffers[0], 0)){
 		cerr << "[ERROR] Allocate Input error!\n";
 		return false;

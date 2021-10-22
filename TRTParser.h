@@ -2,7 +2,7 @@
 TensorRT Parser Class.
 
 author: phatnt.
-modified date: 2021-10-11
+modified date: 2021-10-22
 
  */
 #pragma once
@@ -10,6 +10,7 @@ modified date: 2021-10-11
 #define TRT_PARSER_H
 
 #include <iostream>
+#include <dirent.h>
 
 #include <opencv2/cudawarping.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -18,8 +19,43 @@ modified date: 2021-10-11
 #include <opencv2/highgui/highgui.hpp>
 
 #include "utils.h"
-
 using namespace std;
+
+struct InputData{
+	cv::Mat image;
+	string imagePath;
+
+	InputData(cv::Mat image, string imagePath);
+};
+
+bool CheckFolderIfExist(const string folderPath);
+/*
+Check existance of a folder.
+Args:
+    filePath: path to folder.
+Return:
+    <bool> exist-true / not exist-false
+ */
+
+bool ReadFilesInDir(const char *p_dir_name, vector<string> &file_names);
+/*
+Read all file in a folder.
+Args:
+    p_dir_name: path to folder.
+    file_names: returned file's name array.
+Return:
+    <bool> status checking.
+ */
+
+vector< vector< InputData >> PrepareImageBatch(string folderPath, const unsigned batchSize);
+/*
+Prepare batch for infernces.
+Args:
+    folderPath: path to inference images folder.
+    batchSize:  inference batchsize.
+Return:
+    vector< vector< cv::Mat >> batched images.
+ */
 
 class TRTParser {
 private:
@@ -50,7 +86,7 @@ public:
 		<bool> Success checking.
 	 */
 	
-	bool Inference(vector<cv::Mat> images, const bool softMax);
+	bool Inference(vector<InputData> batchedInput, const bool softMax);
 	/*
 	TensorRT inference.
 	Args:

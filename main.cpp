@@ -49,7 +49,10 @@ int main(int argc,char** argv) {
 			cout << "[INFO] Inference Successed! Done!\n";
 			return 0;
 		}
-		return -1;
+		else{
+			cerr << "[ERROR] Inference Failed!\n";
+			return -1;
+		}
 	}
 	else {
 		cout << "[ERROR] Undefined Mode: '" << string(argv[1]) << "'. \n\n";
@@ -245,7 +248,7 @@ bool TRT_Inference(int argc, char **argv) {
 
 	TRTParser engine;
 	unsigned nrofInferIamges = 0;
-	vector< vector< cv::Mat >> batchedImages;
+	vector< vector< InputData>> batchedData;
 	
  	//Initialize engine
 	if (engine.Init(enginePath)){
@@ -258,24 +261,24 @@ bool TRT_Inference(int argc, char **argv) {
 
 	//Prepare data
 	try {
-		batchedImages = PrepareImageBatch(dataPath, batchsize);
+		batchedData = PrepareImageBatch(dataPath, batchsize);
 	}
 	catch (exception& err){
 		cerr << err.what();
 		return false; 
 	}
     
-    for (unsigned i = 0; i < batchedImages.size(); i++){
+    for (unsigned i = 0; i < batchedData.size(); i++){
     	auto start = chrono::system_clock::now();
-		if (!engine.Inference(batchedImages.at(i), useSofmax)){
+		if (!engine.Inference(batchedData.at(i), useSofmax)){
 			cerr << "[ERROR] Inference error! \n";
 			return false;
 		}
 		auto end = chrono::system_clock::now();
 		cout << chrono::duration_cast<chrono::milliseconds>(end - start).count() << "ms. \n";
-		nrofInferIamges += batchedImages.at(i).size();
+		nrofInferIamges += batchedData.at(i).size();
     }
 	cout << "[INFO] Total inferenced images: " << nrofInferIamges << endl;
-	batchedImages.clear();
+	batchedData.clear();
 	return true;
 }

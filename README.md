@@ -103,11 +103,9 @@
  
   ```sh
     Edit 'Inference' function (Class TRTParser(TRTParser.h and TRTParser.cpp)):
-       - Add 2nd input's data arguments.
+       - Add 2nd input's data for InputData struct (value and initialize) and their value in prepareBatched().
        - Add AllocateImageInput or AllocateNonImageInput for buffer[1](input2) below 'AllocateImageInput' (buffer[0](input1)).
        - Remove 'nrofInputs > 1' condition
-    Edit main.cpp 
-       - Add 2nd input's data to engine.Inference(...) coresponding with above edition. 
    
    ./main infer --weight classifier.trt --data ./infer_images/ --batchsize 3 --softmax
    ```
