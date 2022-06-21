@@ -7,8 +7,8 @@
 
 ## <div align=center> I. Prerequiste. </div>
 
-- **[Install Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/cuda.md)**
-- **[OpenCV with CUDA support (C++/Python)](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/opencv.md)**
+- **[Install Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/wiki/cuda.md)**
+- **[OpenCV with CUDA support (C++/Python)](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/wiki/opencv.md)**
 
 - **Clone and set Path for CMakeLists.**
   ```sh
