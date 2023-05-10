@@ -1,54 +1,48 @@
-# <div align=center> TensorRT_Parser_Cpp </div>
+# <div align=center> TensorRT Parser Cpp </div>
 
-<div align=center>
- <p> The Onnx engine can be run on any system with difference platform (Os/Cuda/CuDNN/TensorRT version) but take a lot of time to parse. </p>
- <p> Convert the Onnx engine to TensorRT engine help you save a lot of parsing time (2-8 min) but can only run on fixed system you've built. </p>
- </div>
+TensorRT module in C/C++ 
 
-## <div align=center> I. Prerequiste. </div>
+The Onnx engine can be run on any system with difference platform (Os/Cuda/CuDNN/TensorRT version).
 
-- **[Install Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/wiki/cuda.md)**
-- **[OpenCV with CUDA support (C++/Python)](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/wiki/opencv.md)**
+## I. Prerequiste
 
-- **Clone and set Path for CMakeLists.**
-  ```sh
-  git clone https://github.com/CuteBoiz/TensorRT_Parser_Cpp
-  cd TensorRT_Parser_Cpp
-  gedit CMakeLists.txt #Add your TensorRT installed path (line 13-14) 
-  ```
+### A.Linux
+- **yaml-cpp**
+    ```sh
+    git clone https://github.com/jbeder/yaml-cpp
+    cd yaml-cpp
+    mkdir build && cd build
+    cmake .. -DYAML_BUILD_SHARED_LIBS=on 
+    ```
+- **Install [Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/wiki/cuda.md)**
 
-- **Move dirent.h file from [Additional files](https://github.com/CuteBoiz/TensorRT_Parser_Cpp/tree/main/Addition%20files) *(Visual Studio Only)*.**
-  ```sh
-  Visual-Studio-Installed-Path\201x\Community\VC\Tools\MSVC\14.16.27023\include
-  ````
+- **[OpenCV with CUDA support](https://github.com/CuteBoiz/Ubuntu_Installation/blob/master/wiki/opencv.md) (C++/Python)**
+
+
+### B. Windows
+
+- **[Install VisualStudio/Cuda/CuDNN/TensorRT](https://github.com/CuteBoiz/TensorRT_Dev_VS)**
+
+- **Download [dirent.h](https://github.com/tronkko/dirent/blob/master/include/dirent.h) then put inside this folder**
+    ```sh
+    Visual-Studio-Installed-Path\201x\Community\VC\Tools\MSVC\xx.xx.xxxxx\include
+    ````
   
-  
-- **Build.**
-  ```sh
-  mkdir build && build
-  cmake ..
-  make
-  ```
+## II. Download & Build
 
-## <div align=center> II. Export Onnx engine to TensorRT engine (.trt).  </div>
 ```sh
-./main export --weight (--maxbatchsize) (--fp16) (--maxworkspace) (--tensor) (--gpu)
+git clone https://github.com/CuteBoiz/TensorRT_Parser_Cpp.git
+cd TensorRT_Parser_Cpp
+mkdir build && cd build
+cmake .. -DTRT:=/path/to/tensorrt #ex: cmake .. -DTRT:=/home/pi/Libraries/TensorRT-8.4.3.1
+make
 ```
-<details> 
-<summary><b>Arguments Details</b></summary>
-    
-   |Arguments Details   |Type           |Default        |Note
-   |---                 |---            |---            |---
-   |`--weight`          |`string`       |`required`     |**Path to onnx engine.**
-   |`--fp16`            |`store_true`   |`false`        |**Use FP16 fast mode (x2 inference time).**
-   |`--maxbatchsize`    |`int`          |`1`            |**Inference max batchsize.**
-   |`--maxworkspace`    |`int`          |`1300(MB)`     |**Max workspace size (MB).**
-   |`--tensor`          |`string_array` |`None`         |**Input tensor(s) for dynamic shape input *(dynamic shape input only)*.**
-   |`--gpu`             |`int`          |`0`            |**Primary gpu index.**
 
-   **Note:** The only GPUs with full-rate FP16 Fast mode performance are Tesla P100, Quadro GP100, and Jetson TX1/TX2.
-    
-</details> 
+## III. Convert Onnx (.onnx) to TensorRT (.trt).
+
+```sh
+./tensorrt_cpp convert /path/to/config.yaml_file
+```
 
 <details> 
 <summary><b>Examples</b></summary>
@@ -56,75 +50,45 @@
 - **Export Onnx engine to TensorRT engine.**
  
   ```sh
-  ./main export --weight classifier.trt
-  ./main export --weight classifier.trt --maxbatchsize 3 --maxworkspace 1500
-  ./main export --weight classifier.trt --fp16 --gpu 2 --maxbatchsize 6 
+  ./tensorrt_cpp convert ../config/onnx_config.yaml
+  ./tensorrt_cpp convert ../config/onnx_config_dynamic.yaml
   ```
- 
-- **Export Onnx engine with Dynamic shape input (batchsize x 3 x 416 x416).**
- 
-  ```sh
-   --tensor tensorName,dims1(,dims2,dims3)  (Does not include batchsize dims)
-   ./main export --weight classifier.trt --tensor input,3,416,416 --maxbatchize 7
-   ./main export --weight classifier.trt --tensor input.1,3,416,416 input.2,12 input.3,7,4
-   ```
- 
+
 </details>
 
-## <div align=center> III. TensorRT engine Inference. </div>
+## IV. TensorRT Inference. </div>
+
 ```sh
-./main infer --weight --data (--batchsize) (--softmax) (--gpu)
+./main infer /path/to/trt_engine /path/to/data  (softmax) (gpuID)
 ```
-<details> 
-<summary><b>Arguments Details</b></summary>
-    
-|Arguments      |Type           |Default    |Note
-|---            |---            |---        |---
-|`--weight`     |`string`       |`required` |**Path to tensorrt engine.**
-|`--data`       |`string`       |`required` |**Path to inference image/video/images's folder.**
-| `--batchsize` |`int`          |`1`        |**Inference batchsize.**
-| `--softmax`   |`store_true`   |`false`    |**Add softmax to last layer of engine.**
-| `--gpu`       |`int`          |`0`        |**Primary gpu index.**
- 
-</details> 
-    
+
+*Data could be path to video/image/images folder*
+*gpuID for select gpuID in multi-gpu system inference*
+
 <details> 
 <summary><b>Examples</b></summary>
  
 - **TensorRT engine Inference.**
  
   ```sh
-  ./main infer --weight classifier.trt --data image.jpg --softmax
-  ./main infer --weight classifier.trt --data ./images/ --batchsize 4
-  ./main infer --weight classifier.trt --data video.mov --batchsize 3 --softmax
+  ./tensorrt_cpp infer  home/usrname/classifier.trt image.jpg 
+  ./tensorrt_cpp infer  classifier.trt ./test_images 1
+  ./tensorrt_cpp infer  classifier.trt video.mp4 softmax
+  ./tensorrt_cpp infer  ../classifier.trt ../images/ softmax 6
   ```
- 
-- **Multiple inputs engine inference**
- 
-  ```sh
-    Edit 'Inference' function (Class TRTParser(TRTParser.h and TRTParser.cpp)):
-       - Add 2nd input's data for InputData struct (value and initialize) and their value in prepareBatched().
-       - Add AllocateImageInput or AllocateNonImageInput for buffer[1](input2) below 'AllocateImageInput' (buffer[0](input1)).
-       - Remove 'nrofInputs > 1' condition
-   
-   ./main infer --weight classifier.trt --data ./infer_images/ --batchsize 3 --softmax
-   ```
 
 </details>
  
-## To-Do
+## Features:
 - **Support**
   - [x] Multiple inputs.
   - [x] Multiple outputs.
   - [x] Non-image input.
   - [x] Channel 1st and last image input (CHW/HWC).
-  - [x] 2D,3D,4D tensor softmax.
+  - [x] 2D,3D,4D,5D tensor softmax.
   - [x] kINT/kBOOL/kFLOAT tensor.
 - **Additions**
   - [x] Switch Primary GPU. 
-  - [x] Examples.
   - [ ] Add CudaStream (Multiple GPU inference).
-- **Bugs**
-  - [x] Remove "Segmentation fault (core dumped)" at ending of inference.
-  - [x] CUDA allocate exception handle.
+
 
