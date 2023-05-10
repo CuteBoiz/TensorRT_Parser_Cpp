@@ -1,0 +1,20 @@
+# Example of basic onnx engine config
+
+# Author: phatnt
+# Date: 2023-Apr-15
+
+# Path to onnx engine
+onnx_path: "/home/phatnt/workspace/FaceRecognition/inference_cpp/New_TRT/weights/model_last.onnx" 
+
+# Max inference batch size
+batch_size: 1
+
+# Max gpu memory workspacesize (MB)
+workspace_size: 100
+
+# use fp16 fast mode
+use_fp16: false
+
+# use dynamic shape 
+use_dynamic: false 
+

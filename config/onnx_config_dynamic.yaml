@@ -1,0 +1,30 @@
+# Example of dynamic shape onnx engine config
+
+# Author: phatnt
+# Date: 2023-Apr-15
+
+# Path to onnx engine
+onnx_path: "/home/phatnt/workspace/FaceRecognition/inference_cpp/New_TRT/weights/face_detect.onnx" 
+
+# Max inference batch size
+batch_size: 1
+
+# Max gpu memory workspacesize (MB)
+workspace_size: 1000
+
+# use fp16 fast mode
+use_fp16: false
+
+# use dynamic shape 
+use_dynamic: true
+
+# If have more inputs add tensor3, tensor4, ... below
+# dims does not contain batchsize
+tensor1:
+  name: "input.1"
+  dims: [3, 640, 640]
+tensor2:
+  name: "onnx::Sigmoid_521"
+  dims: [3, 6]
+
+
